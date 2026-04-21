@@ -56,6 +56,8 @@ export class Planet {
         uSunDirection: { value: new THREE.Vector3(1, 0.5, 0.8).normalize() },
         uSunColor: { value: new THREE.Vector3(1, 0.98, 0.9) },
         uAmbient: { value: 0.15 },
+        uCityLightColor: { value: new THREE.Vector3(1.0, 0.8, 0.4) },
+        uDayNightEnabled: { value: 0.0 },
       },
     });
 
@@ -81,13 +83,14 @@ export class Planet {
     }
   }
 
-  updateBiomeColors(colors: Array<{ r: number; g: number; b: number }>) {
+  updateBiomeColors(colors: Array<{ r: number; g: number; b: number }>, emissiveFlags?: boolean[]) {
     const texData = this.biomeTexture.image.data as Uint8Array;
     for (let i = 0; i < Math.min(colors.length, 16); i++) {
       texData[i * 4] = Math.round(colors[i].r * 255);
       texData[i * 4 + 1] = Math.round(colors[i].g * 255);
       texData[i * 4 + 2] = Math.round(colors[i].b * 255);
-      texData[i * 4 + 3] = 255;
+      // Pack emissive flag into alpha channel (255 = emissive, 0 = not)
+      texData[i * 4 + 3] = emissiveFlags && emissiveFlags[i] ? 255 : 0;
     }
     this.biomeTexture.needsUpdate = true;
   }

@@ -2,7 +2,7 @@ import { useRef, useEffect, useState, useCallback } from 'react';
 import { SceneManager } from './scene/SceneManager';
 import { generateTerrain } from './planet/TerrainGenerator';
 import { assignBiomes } from './planet/BiomeMap';
-import { usePlanetStore } from './store/usePlanetStore';
+import { usePlanetStore, getSunDirection } from './store/usePlanetStore';
 import { PlanetParametersPanel } from './ui/PlanetParametersPanel';
 import { BiomePalette } from './ui/BiomePalette';
 import { Toolbar } from './ui/Toolbar';
@@ -10,8 +10,10 @@ import { TopBar } from './ui/TopBar';
 import { NewPlanetModal } from './ui/NewPlanetModal';
 import { HelpModal } from './ui/HelpModal';
 import { StarPanel } from './ui/StarPanel';
+import { EnvironmentPanel } from './ui/EnvironmentPanel';
 import { ToolManager } from './tools/ToolManager';
 import { TEMPLATES } from './templates/presets';
+import { flattenAdjacency } from './planet/Erosion';
 import * as THREE from 'three';
 
 export default function App() {
@@ -20,6 +22,8 @@ export default function App() {
   const toolManagerRef = useRef<ToolManager | null>(null);
   const [newPlanetOpen, setNewPlanetOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [fpsVisible, setFpsVisible] = useState(false);
+  const [smReady, setSmReady] = useState(false);
 
   // Initialize scene
   useEffect(() => {
@@ -32,13 +36,28 @@ export default function App() {
     generateTerrain(sm.planetData, params);
     const biomes = usePlanetStore.getState().biomes;
     assignBiomes(sm.planetData, biomes);
-    sm.planet.updateBiomeColors(biomes.map((b) => b.color));
+    sm.planet.updateBiomeColors(
+      biomes.map((b) => b.color),
+      biomes.map((b) => b.emissive)
+    );
     sm.planetData.markHeightsDirty();
     sm.planetData.markBiomesDirty();
+
+    // Initial sun direction
+    const star = usePlanetStore.getState().starParams;
+    const sunDir = getSunDirection(star.sunAzimuth, star.sunElevation);
+    const sunVec = new THREE.Vector3(sunDir.x, sunDir.y, sunDir.z);
+    sm.planet.material.uniforms.uSunDirection.value.copy(sunVec);
+    sm.atmosphere.setSunDirection(sunVec);
+    sm.ocean.setSunDirection(sunVec);
+    sm.clouds.setSunDirection(sunVec);
+    sm.rings.setSunDirection(sunVec);
+    sm.star.setDirection(sunVec.clone());
 
     // Tool manager
     const tm = new ToolManager(sm);
     toolManagerRef.current = tm;
+    setSmReady(true);
 
     return () => {
       tm.dispose();
@@ -63,24 +82,39 @@ export default function App() {
   useEffect(() => {
     const sm = sceneManagerRef.current;
     if (!sm) return;
-    sm.planet.updateBiomeColors(biomes.map((b) => b.color));
+    sm.planet.updateBiomeColors(
+      biomes.map((b) => b.color),
+      biomes.map((b) => b.emissive)
+    );
     assignBiomes(sm.planetData, biomes);
   }, [biomes]);
 
-  // React to star/atmosphere changes
+  // React to star changes
   const starParams = usePlanetStore((s) => s.starParams);
-  const atmosphereParams = usePlanetStore((s) => s.atmosphereParams);
   useEffect(() => {
     const sm = sceneManagerRef.current;
     if (!sm) return;
-    const dir = new THREE.Vector3(starParams.direction.x, starParams.direction.y, starParams.direction.z);
-    sm.planet.material.uniforms.uSunDirection.value.copy(dir.normalize());
+    const sunDir = getSunDirection(starParams.sunAzimuth, starParams.sunElevation);
+    const sunVec = new THREE.Vector3(sunDir.x, sunDir.y, sunDir.z);
+    sm.planet.material.uniforms.uSunDirection.value.copy(sunVec);
     sm.planet.material.uniforms.uSunColor.value.set(starParams.color.r, starParams.color.g, starParams.color.b);
     sm.star.setColor(new THREE.Color(starParams.color.r, starParams.color.g, starParams.color.b));
     sm.star.setIntensity(starParams.intensity);
-    sm.star.setDirection(dir.clone());
+    sm.star.setDirection(sunVec.clone());
+    sm.atmosphere.setSunDirection(sunVec);
+    sm.ocean.setSunDirection(sunVec);
+    sm.ocean.setSunColor(starParams.color);
+    sm.clouds.setSunDirection(sunVec);
+    sm.rings.setSunDirection(sunVec);
+    sm.syncSunFromStore();
+    for (const moon of sm.moonInstances.values()) {
+      moon.setSunDirection(sunVec);
+      moon.setSunColor(starParams.color);
+    }
   }, [starParams]);
 
+  // Atmosphere
+  const atmosphereParams = usePlanetStore((s) => s.atmosphereParams);
   useEffect(() => {
     const sm = sceneManagerRef.current;
     if (!sm) return;
@@ -88,6 +122,137 @@ export default function App() {
     sm.atmosphere.setIntensity(atmosphereParams.intensity);
     sm.atmosphere.mesh.visible = atmosphereParams.visible;
   }, [atmosphereParams]);
+
+  // Ocean
+  const oceanParams = usePlanetStore((s) => s.oceanParams);
+  useEffect(() => {
+    const sm = sceneManagerRef.current;
+    if (!sm) return;
+    sm.ocean.mesh.visible = oceanParams.enabled;
+    sm.ocean.setSeaLevel(oceanParams.seaLevel);
+    sm.ocean.setColors(oceanParams.colorShallow, oceanParams.colorDeep);
+    sm.ocean.setWaveParams(oceanParams.waveSpeed, oceanParams.waveAmplitude);
+  }, [oceanParams]);
+
+  // Clouds
+  const cloudParams = usePlanetStore((s) => s.cloudParams);
+  useEffect(() => {
+    const sm = sceneManagerRef.current;
+    if (!sm) return;
+    sm.clouds.mesh.visible = cloudParams.enabled;
+    sm.clouds.setDensity(cloudParams.density);
+    sm.clouds.setRotationSpeed(cloudParams.rotationSpeed);
+    sm.clouds.setColor(cloudParams.color);
+    sm.clouds.setAltitude(cloudParams.altitude);
+  }, [cloudParams]);
+
+  // Rings
+  const ringParams = usePlanetStore((s) => s.ringParams);
+  useEffect(() => {
+    const sm = sceneManagerRef.current;
+    if (!sm) return;
+    sm.rings.mesh.visible = ringParams.enabled;
+    sm.rings.setRadii(ringParams.innerRadius, ringParams.outerRadius);
+    sm.rings.setTilt(ringParams.tilt);
+    sm.rings.setColor(ringParams.color);
+    sm.rings.setOpacity(ringParams.opacity);
+  }, [ringParams]);
+
+  // Moons
+  const moons = usePlanetStore((s) => s.moons);
+  useEffect(() => {
+    const sm = sceneManagerRef.current;
+    if (!sm) return;
+    sm.reconcileMoons(moons);
+  }, [moons]);
+
+  // Day/night
+  const dayNightParams = usePlanetStore((s) => s.dayNightParams);
+  useEffect(() => {
+    const sm = sceneManagerRef.current;
+    if (!sm) return;
+    sm.setDayNight(dayNightParams.enabled, dayNightParams.speed);
+    sm.planet.material.uniforms.uDayNightEnabled.value = dayNightParams.enabled ? 1.0 : 0.0;
+  }, [dayNightParams]);
+
+  // Erosion handler
+  const [eroding, setEroding] = useState(false);
+  const [erosionProgress, setErosionProgress] = useState(0);
+  useEffect(() => {
+    const handler = () => {
+      const sm = sceneManagerRef.current;
+      const tm = toolManagerRef.current;
+      if (!sm || eroding) return;
+
+      setEroding(true);
+      setErosionProgress(0);
+
+      const erosionParams = usePlanetStore.getState().erosionParams;
+      const { flat, offsets, lengths } = flattenAdjacency(sm.planetData.icosphere.adjacency);
+      const heightmapCopy = new Float32Array(sm.planetData.heightmap);
+
+      const worker = new Worker(new URL('./workers/erosion.worker.ts', import.meta.url), { type: 'module' });
+      worker.onmessage = (e: MessageEvent) => {
+        if (e.data.type === 'progress') {
+          setErosionProgress(e.data.percent);
+        } else if (e.data.type === 'done') {
+          const { heightmap, deltaIndices, deltaOldValues, deltaNewValues } = e.data;
+          // Apply result
+          sm.planetData.heightmap.set(heightmap);
+          sm.planetData.markHeightsDirty();
+
+          // Build undo command
+          if (tm) {
+            const deltas = [];
+            for (let i = 0; i < deltaIndices.length; i++) {
+              deltas.push({ index: deltaIndices[i], oldValue: deltaOldValues[i], newValue: deltaNewValues[i] });
+            }
+            tm.getUndoManager().push({ type: 'height', deltas });
+            usePlanetStore.getState().bumpVersion();
+          }
+
+          // Re-assign biomes
+          const biomes = usePlanetStore.getState().biomes;
+          assignBiomes(sm.planetData, biomes);
+
+          setEroding(false);
+          worker.terminate();
+        }
+      };
+
+      worker.postMessage(
+        {
+          type: 'erode',
+          heightmap: heightmapCopy,
+          adjacencyFlat: flat,
+          adjacencyOffsets: offsets,
+          adjacencyLengths: lengths,
+          vertexCount: sm.planetData.icosphere.vertexCount,
+          config: {
+            iterations: erosionParams.iterations,
+            sedimentCapacity: erosionParams.sedimentCapacity,
+            depositionRate: erosionParams.depositionRate,
+            evaporationRate: erosionParams.evaporationRate,
+            inertia: erosionParams.inertia,
+            maxSteps: 30,
+          },
+        },
+        [heightmapCopy.buffer, flat.buffer, offsets.buffer, lengths.buffer]
+      );
+    };
+
+    window.addEventListener('stellaforge-erode', handler);
+    return () => window.removeEventListener('stellaforge-erode', handler);
+  }, [eroding]);
+
+  // FPS toggle with `
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === '`') setFpsVisible((v) => !v);
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
 
   const handleNewPlanet = useCallback((templateIndex: number, seed: string) => {
     const template = TEMPLATES[templateIndex];
@@ -114,10 +279,13 @@ export default function App() {
         onNewPlanet={() => setNewPlanetOpen(true)}
         onScreenshot={handleScreenshot}
         onHelp={() => setHelpOpen(true)}
+        sceneManager={smReady ? sceneManagerRef.current : null}
+        fpsVisible={fpsVisible}
       />
       <PlanetParametersPanel />
       <BiomePalette />
       <StarPanel />
+      <EnvironmentPanel />
       <Toolbar />
       <NewPlanetModal
         open={newPlanetOpen}

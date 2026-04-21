@@ -5,8 +5,13 @@ import { Planet } from './Planet';
 import { Starfield } from './Starfield';
 import { Star } from './Star';
 import { Atmosphere } from './Atmosphere';
+import { Ocean } from './Ocean';
+import { Clouds } from './Clouds';
+import { Rings } from './Rings';
+import { Moon } from './Moon';
 import { CameraController } from './CameraController';
 import { computeBoundsTree, disposeBoundsTree, acceleratedRaycast } from 'three-mesh-bvh';
+import { usePlanetStore, getSunDirection, MoonConfig } from '@/store/usePlanetStore';
 
 // Extend Three.js prototypes for BVH
 THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
@@ -23,9 +28,21 @@ export class SceneManager {
   public starfield: Starfield;
   public star: Star;
   public atmosphere: Atmosphere;
+  public ocean: Ocean;
+  public clouds: Clouds;
+  public rings: Rings;
+  public moonInstances: Map<string, Moon> = new Map();
 
   private animationId: number = 0;
   private container: HTMLElement;
+  private frameTimes: number[] = [];
+  private lastFrameTime: number = 0;
+  private clock = new THREE.Clock();
+
+  // Day/night cycle local state (bypass store for per-frame perf)
+  private dayNightActive = false;
+  private dayNightSpeed = 0.1;
+  private localSunAzimuth = 0;
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -56,9 +73,22 @@ export class SceneManager {
     // Compute BVH for raycasting
     this.planet.geometry.computeBoundsTree();
 
+    // Ocean
+    this.ocean = new Ocean(0.0);
+    this.scene.add(this.ocean.mesh);
+
+    // Clouds
+    this.clouds = new Clouds(0.02);
+    this.scene.add(this.clouds.mesh);
+
     // Atmosphere
     this.atmosphere = new Atmosphere(1.15);
     this.scene.add(this.atmosphere.mesh);
+
+    // Rings (initially hidden)
+    this.rings = new Rings();
+    this.rings.mesh.visible = false;
+    this.scene.add(this.rings.mesh);
 
     // Star
     this.star = new Star();
@@ -72,6 +102,10 @@ export class SceneManager {
     const ambient = new THREE.AmbientLight(0x404040, 0.3);
     this.scene.add(ambient);
 
+    // Initialize local sun azimuth from store
+    const state = usePlanetStore.getState();
+    this.localSunAzimuth = state.starParams.sunAzimuth;
+
     // Events
     window.addEventListener('resize', this.onResize);
 
@@ -79,8 +113,87 @@ export class SceneManager {
     this.animate();
   }
 
+  getFps(): number {
+    if (this.frameTimes.length < 2) return 0;
+    const sum = this.frameTimes.reduce((a, b) => a + b, 0);
+    return Math.round((this.frameTimes.length / sum) * 1000);
+  }
+
+  setDayNight(active: boolean, speed: number) {
+    this.dayNightActive = active;
+    this.dayNightSpeed = speed;
+    if (active) {
+      this.localSunAzimuth = usePlanetStore.getState().starParams.sunAzimuth;
+    }
+  }
+
+  syncSunFromStore() {
+    const { sunAzimuth } = usePlanetStore.getState().starParams;
+    this.localSunAzimuth = sunAzimuth;
+  }
+
+  reconcileMoons(configs: MoonConfig[]) {
+    const currentIds = new Set(this.moonInstances.keys());
+    const newIds = new Set(configs.map((c) => c.id));
+
+    // Remove deleted moons
+    for (const id of currentIds) {
+      if (!newIds.has(id)) {
+        const moon = this.moonInstances.get(id)!;
+        this.scene.remove(moon.group);
+        moon.dispose();
+        this.moonInstances.delete(id);
+      }
+    }
+
+    // Add new moons
+    for (const config of configs) {
+      if (!this.moonInstances.has(config.id)) {
+        const moon = new Moon(config);
+        this.moonInstances.set(config.id, moon);
+        this.scene.add(moon.group);
+      } else {
+        // Update config
+        this.moonInstances.get(config.id)!.config = config;
+      }
+    }
+  }
+
   private animate = () => {
     this.animationId = requestAnimationFrame(this.animate);
+
+    // FPS measurement
+    const now = performance.now();
+    if (this.lastFrameTime > 0) {
+      this.frameTimes.push(now - this.lastFrameTime);
+      if (this.frameTimes.length > 60) this.frameTimes.shift();
+    }
+    this.lastFrameTime = now;
+
+    const dt = this.clock.getDelta();
+    const elapsed = this.clock.getElapsedTime();
+
+    // Day/night cycle
+    if (this.dayNightActive) {
+      this.localSunAzimuth += this.dayNightSpeed * dt;
+      // Sync back to store at ~10Hz to keep UI updated without per-frame overhead
+      if (Math.floor(elapsed * 10) !== Math.floor((elapsed - dt) * 10)) {
+        usePlanetStore.getState().setStarParams({ sunAzimuth: this.localSunAzimuth });
+      }
+      // Update scene directly
+      const elev = usePlanetStore.getState().starParams.sunElevation;
+      const sunDir = getSunDirection(this.localSunAzimuth, elev);
+      const sunVec = new THREE.Vector3(sunDir.x, sunDir.y, sunDir.z);
+      this.planet.material.uniforms.uSunDirection.value.copy(sunVec);
+      this.atmosphere.setSunDirection(sunVec);
+      this.star.setDirection(sunVec.clone());
+      this.ocean.setSunDirection(sunVec);
+      this.clouds.setSunDirection(sunVec);
+      this.rings.setSunDirection(sunVec);
+      for (const moon of this.moonInstances.values()) {
+        moon.setSunDirection(sunVec);
+      }
+    }
 
     // Update camera
     this.cameraController.update();
@@ -95,6 +208,15 @@ export class SceneManager {
       }
 
       this.planetData.clearDirty();
+    }
+
+    // Update time-based uniforms
+    this.ocean.setTime(elapsed);
+    this.clouds.setTime(elapsed);
+
+    // Update moon orbits
+    for (const moon of this.moonInstances.values()) {
+      moon.updateOrbit(elapsed);
     }
 
     this.renderer.render(this.scene, this.camera);
@@ -114,6 +236,12 @@ export class SceneManager {
     this.cameraController.dispose();
     this.planet.dispose();
     this.atmosphere.dispose();
+    this.ocean.dispose();
+    this.clouds.dispose();
+    this.rings.dispose();
+    for (const moon of this.moonInstances.values()) {
+      moon.dispose();
+    }
     this.starfield.dispose();
     this.star.dispose();
     this.renderer.dispose();

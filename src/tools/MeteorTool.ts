@@ -55,9 +55,11 @@ export class MeteorTool implements ITool {
       this.planetData.heightmap[index] = Math.max(-1, Math.min(1, oldHeight + delta));
       this.deltas.push({ index, oldValue: oldHeight, newValue: this.planetData.heightmap[index] });
 
-      // Set rocky biome in crater
+      // Set crater biome
       if (dist < 0.7) {
-        this.planetData.biomeIds[index] = 6; // Rocky
+        const state = usePlanetStore.getState();
+        const craterBiome = state.meteorCraterBiomeId ?? state.selectedBiomeId;
+        this.planetData.biomeIds[index] = craterBiome;
       }
     }
 

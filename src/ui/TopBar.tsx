@@ -1,15 +1,20 @@
 import { Camera, HelpCircle, Plus } from 'lucide-react';
+import { FpsCounter } from './FpsCounter';
+import { SceneManager } from '@/scene/SceneManager';
 
 interface TopBarProps {
   onNewPlanet: () => void;
   onScreenshot: () => void;
   onHelp: () => void;
+  sceneManager: SceneManager | null;
+  fpsVisible: boolean;
 }
 
-export function TopBar({ onNewPlanet, onScreenshot, onHelp }: TopBarProps) {
+export function TopBar({ onNewPlanet, onScreenshot, onHelp, sceneManager, fpsVisible }: TopBarProps) {
   return (
     <div className="absolute top-0 left-0 right-0 h-12 bg-gray-900/80 backdrop-blur border-b border-gray-700 flex items-center px-4 gap-3 z-10">
       <h1 className="text-white font-bold text-sm tracking-wide">StellaForge</h1>
+      <FpsCounter sceneManager={sceneManager} visible={fpsVisible} />
       <div className="flex-1" />
       <button
         onClick={onNewPlanet}

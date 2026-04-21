@@ -6,7 +6,7 @@ import { usePlanetStore } from '@/store/usePlanetStore';
 export class BiomePaintTool implements ITool {
   name = 'biome';
   private deltas = new Map<number, { oldValue: number; newValue: number }>();
-  public paintBiomeId = 0;
+  // Reads selectedBiomeId from store at apply-time, not per-frame
 
   constructor(private planetData: PlanetData) {}
 
@@ -45,8 +45,9 @@ export class BiomePaintTool implements ITool {
         if (!this.deltas.has(index)) {
           this.deltas.set(index, { oldValue: this.planetData.biomeIds[index], newValue: this.planetData.biomeIds[index] });
         }
-        this.planetData.biomeIds[index] = this.paintBiomeId;
-        this.deltas.get(index)!.newValue = this.paintBiomeId;
+        const biomeId = usePlanetStore.getState().selectedBiomeId;
+        this.planetData.biomeIds[index] = biomeId;
+        this.deltas.get(index)!.newValue = biomeId;
       }
     }
 

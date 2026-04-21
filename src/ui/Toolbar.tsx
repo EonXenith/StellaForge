@@ -1,5 +1,5 @@
 import { usePlanetStore, ToolType } from '@/store/usePlanetStore';
-import { Mountain, Waves, Eraser, Paintbrush, Circle, Flame } from 'lucide-react';
+import { Mountain, Waves, Eraser, Paintbrush, Circle } from 'lucide-react';
 import { useEffect } from 'react';
 
 const tools: { type: ToolType; icon: typeof Mountain; label: string; key: string }[] = [
@@ -15,6 +15,10 @@ export function Toolbar() {
   const setToolState = usePlanetStore((s) => s.setToolState);
   const brushRadius = usePlanetStore((s) => s.toolState.brushRadius);
   const brushStrength = usePlanetStore((s) => s.toolState.brushStrength);
+  const brushFalloff = usePlanetStore((s) => s.toolState.brushFalloff);
+  const biomes = usePlanetStore((s) => s.biomes);
+  const meteorCraterBiomeId = usePlanetStore((s) => s.meteorCraterBiomeId);
+  const setMeteorCraterBiomeId = usePlanetStore((s) => s.setMeteorCraterBiomeId);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -67,6 +71,39 @@ export function Toolbar() {
           className="w-16 accent-blue-500"
         />
       </label>
+      <label className="flex flex-col items-center gap-0.5" title="0 = hard edge, 1 = soft gradient">
+        <span className="text-[10px] text-gray-400">Falloff</span>
+        <input
+          type="range"
+          min={0}
+          max={1}
+          step={0.01}
+          value={brushFalloff}
+          onChange={(e) => setToolState({ brushFalloff: parseFloat(e.target.value) })}
+          className="w-16 accent-blue-500"
+        />
+      </label>
+      {activeTool === 'meteor' && (
+        <>
+          <div className="w-px h-6 bg-gray-600 mx-1" />
+          <label className="flex flex-col items-center gap-0.5">
+            <span className="text-[10px] text-gray-400">Crater Biome</span>
+            <select
+              value={meteorCraterBiomeId ?? 'selected'}
+              onChange={(e) => {
+                const val = e.target.value;
+                setMeteorCraterBiomeId(val === 'selected' ? null : parseInt(val));
+              }}
+              className="bg-gray-800 text-gray-300 text-[10px] px-1 py-0.5 rounded border border-gray-600"
+            >
+              <option value="selected">Use selected</option>
+              {biomes.map((b, i) => (
+                <option key={i} value={i}>{b.name}</option>
+              ))}
+            </select>
+          </label>
+        </>
+      )}
     </div>
   );
 }
