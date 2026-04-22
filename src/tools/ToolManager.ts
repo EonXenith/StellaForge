@@ -46,6 +46,9 @@ export class ToolManager {
   private onPointerDown = (e: PointerEvent) => {
     if (e.button !== 0) return;
 
+    const tool = this.getActiveTool();
+    if (!tool) return; // No tool selected — let camera handle it
+
     const hit = this.raycast(e);
     if (!hit) return;
 
@@ -54,8 +57,6 @@ export class ToolManager {
     this.domElement.setPointerCapture(e.pointerId);
 
     this.isStroking = true;
-    const tool = this.getActiveTool();
-    if (!tool) return;
 
     // Handle raise/lower toggle
     if (tool instanceof RaiseLowerTool) {
@@ -67,6 +68,9 @@ export class ToolManager {
   };
 
   private onPointerMove = (e: PointerEvent) => {
+    const tool = this.getActiveTool();
+    if (!tool) return; // No tool selected — no preview or drag
+
     const hit = this.raycast(e);
 
     if (hit) {
@@ -74,9 +78,6 @@ export class ToolManager {
     }
 
     if (!this.isStroking || !hit) return;
-
-    const tool = this.getActiveTool();
-    if (!tool) return;
     tool.onStrokeDrag(hit);
   };
 

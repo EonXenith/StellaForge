@@ -22,19 +22,26 @@ export function Toolbar() {
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setToolState({ activeTool: 'none' });
+        return;
+      }
       const tool = tools.find((t) => t.key === e.key);
-      if (tool) setToolState({ activeTool: tool.type });
+      if (tool) {
+        // Toggle: pressing the same key again deselects
+        setToolState({ activeTool: activeTool === tool.type ? 'none' : tool.type });
+      }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [setToolState]);
+  }, [setToolState, activeTool]);
 
   return (
     <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-gray-900/90 backdrop-blur rounded-lg p-3 flex items-center gap-2 border border-gray-700">
       {tools.map(({ type, icon: Icon, label, key }) => (
         <button
           key={type}
-          onClick={() => setToolState({ activeTool: type })}
+          onClick={() => setToolState({ activeTool: activeTool === type ? 'none' : type })}
           className={`p-2 rounded transition-colors ${
             activeTool === type
               ? 'bg-blue-600 text-white'

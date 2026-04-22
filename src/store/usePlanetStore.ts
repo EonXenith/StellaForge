@@ -71,7 +71,7 @@ export interface ErosionParams {
   inertia: number;
 }
 
-export type ToolType = 'raise' | 'lower' | 'smooth' | 'flatten' | 'biome' | 'meteor';
+export type ToolType = 'none' | 'raise' | 'lower' | 'smooth' | 'flatten' | 'biome' | 'meteor';
 
 export interface ToolState {
   activeTool: ToolType;
@@ -183,7 +183,7 @@ export const usePlanetStore = create<PlanetStore>((set) => ({
   },
   biomes: [...DEFAULT_BIOMES],
   toolState: {
-    activeTool: 'raise',
+    activeTool: 'none',
     brushRadius: 0.15,
     brushStrength: 0.02,
     brushFalloff: 0.5,
