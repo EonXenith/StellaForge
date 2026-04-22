@@ -1,27 +1,5 @@
 import { usePlanetStore } from '@/store/usePlanetStore';
-
-function Toggle({ label, value, onChange }: { label: string; value: boolean; onChange: (v: boolean) => void }) {
-  return (
-    <label className="flex items-center justify-between">
-      <span className="text-xs text-gray-300">{label}</span>
-      <input type="checkbox" checked={value} onChange={(e) => onChange(e.target.checked)} className="accent-blue-500" />
-    </label>
-  );
-}
-
-function Slider({ label, value, min, max, step, onChange }: {
-  label: string; value: number; min: number; max: number; step: number; onChange: (v: number) => void;
-}) {
-  return (
-    <label className="flex flex-col gap-0.5">
-      <span className="text-[10px] text-gray-400 flex justify-between">
-        <span>{label}</span><span>{value.toFixed(step < 0.01 ? 3 : 2)}</span>
-      </span>
-      <input type="range" min={min} max={max} step={step} value={value}
-        onChange={(e) => onChange(parseFloat(e.target.value))} className="w-full accent-blue-500" />
-    </label>
-  );
-}
+import { Section, Slider, Toggle } from './shared';
 
 export function EnvironmentPanel() {
   const ocean = usePlanetStore((s) => s.oceanParams);
@@ -38,75 +16,84 @@ export function EnvironmentPanel() {
   const updateMoon = usePlanetStore((s) => s.updateMoon);
 
   return (
-    <div className="absolute top-16 left-[calc(16rem+2rem)] w-56 bg-gray-900/90 backdrop-blur rounded-lg p-4 flex flex-col gap-3 border border-gray-700 max-h-[calc(100vh-6rem)] overflow-y-auto">
+    <div className="absolute top-16 left-[calc(16rem+2rem)] w-56 bg-gray-900/90 backdrop-blur rounded-lg p-4 flex flex-col gap-2 border border-gray-700 max-h-[calc(100vh-6rem)] overflow-y-auto">
       <h2 className="text-sm font-semibold text-white">Environment</h2>
 
       {/* Ocean */}
-      <div className="flex flex-col gap-1.5">
-        <Toggle label="Ocean" value={ocean.enabled} onChange={(v) => setOcean({ enabled: v })} />
+      <Section title="Ocean" defaultOpen>
+        <Toggle label="Enabled" value={ocean.enabled} onChange={(v) => setOcean({ enabled: v })} />
         {ocean.enabled && (
           <>
-            <Slider label="Sea Level" value={ocean.seaLevel} min={-0.5} max={0.5} step={0.01} onChange={(v) => setOcean({ seaLevel: v })} />
-            <Slider label="Wave Speed" value={ocean.waveSpeed} min={0} max={0.5} step={0.01} onChange={(v) => setOcean({ waveSpeed: v })} />
-            <Slider label="Wave Height" value={ocean.waveAmplitude} min={0} max={0.02} step={0.001} onChange={(v) => setOcean({ waveAmplitude: v })} />
+            <Slider label="Sea Level" value={ocean.seaLevel} min={-0.5} max={0.5} step={0.01} onChange={(v) => setOcean({ seaLevel: v })} tooltip="Height at which water begins. Raise to flood more terrain." />
+            <Slider label="Wave Speed" value={ocean.waveSpeed} min={0} max={0.5} step={0.01} onChange={(v) => setOcean({ waveSpeed: v })} tooltip="Animation speed of ocean waves." />
+            <Slider label="Wave Height" value={ocean.waveAmplitude} min={0} max={0.02} step={0.001} onChange={(v) => setOcean({ waveAmplitude: v })} tooltip="Vertical displacement of wave crests." />
           </>
         )}
-      </div>
+      </Section>
 
       <div className="w-full h-px bg-gray-700" />
 
       {/* Clouds */}
-      <div className="flex flex-col gap-1.5">
-        <Toggle label="Clouds" value={clouds.enabled} onChange={(v) => setClouds({ enabled: v })} />
+      <Section title="Clouds">
+        <Toggle label="Enabled" value={clouds.enabled} onChange={(v) => setClouds({ enabled: v })} />
         {clouds.enabled && (
           <>
-            <Slider label="Density" value={clouds.density} min={0} max={1} step={0.01} onChange={(v) => setClouds({ density: v })} />
-            <Slider label="Rotation" value={clouds.rotationSpeed} min={0} max={0.1} step={0.005} onChange={(v) => setClouds({ rotationSpeed: v })} />
-            <Slider label="Altitude" value={clouds.altitude} min={0.01} max={0.1} step={0.005} onChange={(v) => setClouds({ altitude: v })} />
+            <Slider label="Density" value={clouds.density} min={0} max={1} step={0.01} onChange={(v) => setClouds({ density: v })} tooltip="Cloud coverage. Higher = more clouds." />
+            <Slider label="Rotation" value={clouds.rotationSpeed} min={0} max={0.1} step={0.005} onChange={(v) => setClouds({ rotationSpeed: v })} tooltip="Speed at which clouds rotate around the planet." />
+            <Slider label="Altitude" value={clouds.altitude} min={0.01} max={0.1} step={0.005} onChange={(v) => setClouds({ altitude: v })} tooltip="Height of the cloud layer above the surface." />
           </>
         )}
-      </div>
+      </Section>
 
       <div className="w-full h-px bg-gray-700" />
 
       {/* Rings */}
-      <div className="flex flex-col gap-1.5">
-        <Toggle label="Rings" value={rings.enabled} onChange={(v) => setRings({ enabled: v })} />
+      <Section title="Rings">
+        <Toggle label="Enabled" value={rings.enabled} onChange={(v) => setRings({ enabled: v })} />
         {rings.enabled && (
           <>
-            <Slider label="Inner Radius" value={rings.innerRadius} min={1.1} max={1.8} step={0.05} onChange={(v) => setRings({ innerRadius: v })} />
-            <Slider label="Outer Radius" value={rings.outerRadius} min={1.5} max={3.0} step={0.05} onChange={(v) => setRings({ outerRadius: v })} />
-            <Slider label="Tilt" value={rings.tilt} min={0} max={1.5} step={0.05} onChange={(v) => setRings({ tilt: v })} />
-            <Slider label="Opacity" value={rings.opacity} min={0} max={1} step={0.05} onChange={(v) => setRings({ opacity: v })} />
+            <Slider label="Inner Radius" value={rings.innerRadius} min={1.1} max={1.8} step={0.05} onChange={(v) => setRings({ innerRadius: v })} tooltip="Where the ring starts, measured from planet center." />
+            <Slider label="Outer Radius" value={rings.outerRadius} min={1.5} max={3.0} step={0.05} onChange={(v) => setRings({ outerRadius: v })} tooltip="Where the ring ends. Wider gap = wider ring." />
+            <Slider label="Tilt" value={rings.tilt} min={0} max={1.5} step={0.05} onChange={(v) => setRings({ tilt: v })} tooltip="Angle of the ring plane relative to the equator." />
+            <Slider label="Opacity" value={rings.opacity} min={0} max={1} step={0.05} onChange={(v) => setRings({ opacity: v })} tooltip="Transparency of the ring material." />
           </>
         )}
-      </div>
+      </Section>
 
       <div className="w-full h-px bg-gray-700" />
 
       {/* Day/Night */}
-      <div className="flex flex-col gap-1.5">
-        <Toggle label="Day/Night Cycle" value={dayNight.enabled} onChange={(v) => setDayNight({ enabled: v })} />
+      <Section title="Day/Night">
+        <Toggle label="Enabled" value={dayNight.enabled} onChange={(v) => setDayNight({ enabled: v })} />
         {dayNight.enabled && (
-          <Slider label="Speed" value={dayNight.speed} min={-1} max={1} step={0.01} onChange={(v) => setDayNight({ speed: v })} />
+          <Slider label="Speed" value={dayNight.speed} min={-1} max={1} step={0.01} onChange={(v) => setDayNight({ speed: v })} tooltip="Rotation speed of the day/night cycle. Negative = reverse." />
         )}
-      </div>
+      </Section>
 
       <div className="w-full h-px bg-gray-700" />
 
       {/* Moons */}
-      <div className="flex flex-col gap-1.5">
-        <div className="flex items-center justify-between">
-          <span className="text-xs text-gray-300">Moons</span>
-          <button onClick={addMoon} className="text-[10px] px-2 py-0.5 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded">
+      <Section
+        title="Moons"
+        right={
+          <button
+            onClick={addMoon}
+            className="text-[10px] px-2 py-0.5 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded"
+          >
             + Add
           </button>
-        </div>
+        }
+      >
+        {moons.length === 0 && (
+          <span className="text-[10px] text-gray-500 italic">No moons. Click + Add.</span>
+        )}
         {moons.map((m) => (
           <div key={m.id} className="flex flex-col gap-1 bg-gray-800/50 rounded p-2">
             <div className="flex items-center justify-between">
               <span className="text-[10px] text-gray-400">Moon</span>
-              <button onClick={() => removeMoon(m.id)} className="text-[10px] text-red-400 hover:text-red-300">Remove</button>
+              <button onClick={() => removeMoon(m.id)} className="text-[10px] text-red-400 hover:text-red-300">
+                Remove
+              </button>
             </div>
             <Slider label="Size" value={m.size} min={0.05} max={0.4} step={0.01} onChange={(v) => updateMoon(m.id, { size: v })} />
             <Slider label="Orbit" value={m.orbitRadius} min={1.5} max={5} step={0.1} onChange={(v) => updateMoon(m.id, { orbitRadius: v })} />
@@ -114,7 +101,7 @@ export function EnvironmentPanel() {
             <Slider label="Tilt" value={m.orbitTilt} min={0} max={1.5} step={0.05} onChange={(v) => updateMoon(m.id, { orbitTilt: v })} />
           </div>
         ))}
-      </div>
+      </Section>
     </div>
   );
 }

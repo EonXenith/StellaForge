@@ -175,7 +175,7 @@ export const usePlanetStore = create<PlanetStore>((set) => ({
     speed: 0.1,
   },
   erosionParams: {
-    iterations: 50000,
+    iterations: 30000,
     sedimentCapacity: 4.0,
     depositionRate: 0.3,
     evaporationRate: 0.01,
