@@ -60,9 +60,9 @@ export class Star {
   }
 
   setColor(color: THREE.Color) {
-    (this.group.children[0] as THREE.Mesh).material = new THREE.MeshBasicMaterial({ color });
-    ((this.group.children[1] as THREE.Sprite).material as THREE.SpriteMaterial).color = color;
-    this.light.color = color;
+    ((this.group.children[0] as THREE.Mesh).material as THREE.MeshBasicMaterial).color.copy(color);
+    ((this.group.children[1] as THREE.Sprite).material as THREE.SpriteMaterial).color.copy(color);
+    this.light.color.copy(color);
   }
 
   setIntensity(intensity: number) {
