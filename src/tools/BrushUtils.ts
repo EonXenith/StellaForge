@@ -15,14 +15,15 @@ export function collectBrushVertices(
   const result: BrushVertex[] = [];
   const visited = new Set<number>();
   const queue: number[] = [centerIndex];
+  let front = 0; // Front-pointer for O(1) dequeue instead of queue.shift()
   visited.add(centerIndex);
 
   const cx = displacedPositions[centerIndex * 3];
   const cy = displacedPositions[centerIndex * 3 + 1];
   const cz = displacedPositions[centerIndex * 3 + 2];
 
-  while (queue.length > 0) {
-    const idx = queue.shift()!;
+  while (front < queue.length) {
+    const idx = queue[front++];
     const px = displacedPositions[idx * 3];
     const py = displacedPositions[idx * 3 + 1];
     const pz = displacedPositions[idx * 3 + 2];
