@@ -16,6 +16,7 @@ export interface ErosionRequest {
   adjacencyFlat: Float32Array; // Flattened adjacency with offsets
   adjacencyOffsets: Uint32Array; // Start index per vertex into adjacencyFlat
   adjacencyLengths: Uint32Array; // Neighbor count per vertex
+  positions: Float32Array; // Unit-sphere vertex positions (3 floats per vertex) for inertia direction
   vertexCount: number;
   config: ErosionConfig;
 }

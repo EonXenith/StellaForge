@@ -190,6 +190,7 @@ export default function App() {
       const erosionParams = usePlanetStore.getState().erosionParams;
       const { flat, offsets, lengths } = flattenAdjacency(sm.planetData.icosphere.adjacency);
       const heightmapCopy = new Float32Array(sm.planetData.heightmap);
+      const positionsCopy = new Float32Array(sm.planetData.icosphere.positions);
 
       const worker = new Worker(new URL('./workers/erosion.worker.ts', import.meta.url), { type: 'module' });
       worker.onmessage = (e: MessageEvent) => {
@@ -227,6 +228,7 @@ export default function App() {
           adjacencyFlat: flat,
           adjacencyOffsets: offsets,
           adjacencyLengths: lengths,
+          positions: positionsCopy,
           vertexCount: sm.planetData.icosphere.vertexCount,
           config: {
             iterations: erosionParams.iterations,
@@ -237,7 +239,7 @@ export default function App() {
             maxSteps: 30,
           },
         },
-        [heightmapCopy.buffer, flat.buffer, offsets.buffer, lengths.buffer]
+        [heightmapCopy.buffer, flat.buffer, offsets.buffer, lengths.buffer, positionsCopy.buffer]
       );
     };
 

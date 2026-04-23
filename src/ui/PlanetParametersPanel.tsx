@@ -143,6 +143,13 @@ export function PlanetParametersPanel() {
           onChange={(v) => setErosionParams({ evaporationRate: v })}
           tooltip="How quickly water evaporates. Higher = shorter erosion paths."
         />
+        <Slider
+          label="Inertia"
+          value={erosionParams.inertia}
+          min={0} max={0.5} step={0.01}
+          onChange={(v) => setErosionParams({ inertia: v })}
+          tooltip="How much droplets follow their previous direction. Higher = longer, straighter channels."
+        />
 
         <button
           onClick={handleErode}
