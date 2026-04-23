@@ -176,16 +176,16 @@ export default function App() {
   }, [dayNightParams]);
 
   // Erosion handler
-  const [eroding, setEroding] = useState(false);
-  const [erosionProgress, setErosionProgress] = useState(0);
+  const eroding = usePlanetStore((s) => s.eroding);
   useEffect(() => {
     const handler = () => {
       const sm = sceneManagerRef.current;
       const tm = toolManagerRef.current;
-      if (!sm || eroding) return;
+      const store = usePlanetStore.getState();
+      if (!sm || store.eroding) return;
 
-      setEroding(true);
-      setErosionProgress(0);
+      store.setEroding(true);
+      store.setErosionProgress(0);
 
       const erosionParams = usePlanetStore.getState().erosionParams;
       const { flat, offsets, lengths } = flattenAdjacency(sm.planetData.icosphere.adjacency);
@@ -195,7 +195,7 @@ export default function App() {
       const worker = new Worker(new URL('./workers/erosion.worker.ts', import.meta.url), { type: 'module' });
       worker.onmessage = (e: MessageEvent) => {
         if (e.data.type === 'progress') {
-          setErosionProgress(e.data.percent);
+          usePlanetStore.getState().setErosionProgress(e.data.percent);
         } else if (e.data.type === 'done') {
           const { heightmap, deltaIndices, deltaOldValues, deltaNewValues } = e.data;
           // Apply result
@@ -216,7 +216,7 @@ export default function App() {
           const biomes = usePlanetStore.getState().biomes;
           assignBiomes(sm.planetData, biomes);
 
-          setEroding(false);
+          usePlanetStore.getState().setEroding(false);
           worker.terminate();
         }
       };

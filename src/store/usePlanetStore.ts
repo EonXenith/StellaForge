@@ -111,6 +111,8 @@ interface PlanetStore {
   toolState: ToolState;
   selectedBiomeId: number;
   meteorCraterBiomeId: number | null; // null = use selectedBiomeId
+  eroding: boolean;
+  erosionProgress: number;
   version: number;
 
   setTerrainParams: (params: Partial<TerrainParams>) => void;
@@ -128,6 +130,8 @@ interface PlanetStore {
   setToolState: (state: Partial<ToolState>) => void;
   setSelectedBiomeId: (id: number) => void;
   setMeteorCraterBiomeId: (id: number | null) => void;
+  setEroding: (eroding: boolean) => void;
+  setErosionProgress: (percent: number) => void;
   bumpVersion: () => void;
 }
 
@@ -190,6 +194,8 @@ export const usePlanetStore = create<PlanetStore>((set) => ({
   },
   selectedBiomeId: 0,
   meteorCraterBiomeId: null,
+  eroding: false,
+  erosionProgress: 0,
   version: 0,
 
   setTerrainParams: (params) =>
@@ -234,6 +240,8 @@ export const usePlanetStore = create<PlanetStore>((set) => ({
     set((s) => ({ toolState: { ...s.toolState, ...state } })),
   setSelectedBiomeId: (id) => set({ selectedBiomeId: id }),
   setMeteorCraterBiomeId: (id) => set({ meteorCraterBiomeId: id }),
+  setEroding: (eroding) => set({ eroding }),
+  setErosionProgress: (erosionProgress) => set({ erosionProgress }),
   bumpVersion: () => set((s) => ({ version: s.version + 1 })),
 }));
 

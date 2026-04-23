@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useCallback, useRef, useEffect } from 'react';
 import { usePlanetStore } from '@/store/usePlanetStore';
 import { TEMPLATES } from '@/templates/presets';
 import { Section, Slider } from './shared';
@@ -9,8 +9,8 @@ export function PlanetParametersPanel() {
   const setBiomes = usePlanetStore((s) => s.setBiomes);
   const erosionParams = usePlanetStore((s) => s.erosionParams);
   const setErosionParams = usePlanetStore((s) => s.setErosionParams);
-  const [eroding, setEroding] = useState(false);
-  const [erosionProgress, setErosionProgress] = useState(0);
+  const eroding = usePlanetStore((s) => s.eroding);
+  const erosionProgress = usePlanetStore((s) => s.erosionProgress);
 
   // Debounced terrain param updates
   const timerRef = useRef<ReturnType<typeof setTimeout>>(null);
