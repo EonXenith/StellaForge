@@ -5,12 +5,14 @@ import { usePlanetStore } from '@/store/usePlanetStore';
 
 export class MeteorTool implements ITool {
   name = 'meteor';
-  private deltas: ToolStrokeDelta[] = [];
+  private heightDeltas: ToolStrokeDelta[] = [];
+  private biomeDeltas: ToolStrokeDelta[] = [];
 
   constructor(private planetData: PlanetData) {}
 
   onStrokeStart(hit: BrushHit) {
-    this.deltas = [];
+    this.heightDeltas = [];
+    this.biomeDeltas = [];
     this.createCrater(hit);
   }
 
@@ -19,7 +21,13 @@ export class MeteorTool implements ITool {
   }
 
   onStrokeEnd(): ToolStrokeDelta[] | null {
-    return this.deltas.length > 0 ? this.deltas : null;
+    // Return height deltas; ToolManager will check for biome deltas via getCompoundDeltas()
+    return this.heightDeltas.length > 0 ? this.heightDeltas : null;
+  }
+
+  /** Returns biome deltas collected during the last stroke, if any. */
+  getBiomeDeltas(): ToolStrokeDelta[] | null {
+    return this.biomeDeltas.length > 0 ? this.biomeDeltas : null;
   }
 
   private createCrater(hit: BrushHit) {
@@ -37,6 +45,9 @@ export class MeteorTool implements ITool {
       posAttr
     );
 
+    const state = usePlanetStore.getState();
+    const craterBiome = state.meteorCraterBiomeId ?? state.selectedBiomeId;
+
     for (const { index, weight } of vertices) {
       const dist = 1 - weight; // Convert weight to distance ratio
       const oldHeight = this.planetData.heightmap[index];
@@ -53,13 +64,13 @@ export class MeteorTool implements ITool {
       }
 
       this.planetData.heightmap[index] = Math.max(-1, Math.min(1, oldHeight + delta));
-      this.deltas.push({ index, oldValue: oldHeight, newValue: this.planetData.heightmap[index] });
+      this.heightDeltas.push({ index, oldValue: oldHeight, newValue: this.planetData.heightmap[index] });
 
-      // Set crater biome
+      // Set crater biome and track delta for undo
       if (dist < 0.7) {
-        const state = usePlanetStore.getState();
-        const craterBiome = state.meteorCraterBiomeId ?? state.selectedBiomeId;
+        const oldBiome = this.planetData.biomeIds[index];
         this.planetData.biomeIds[index] = craterBiome;
+        this.biomeDeltas.push({ index, oldValue: oldBiome, newValue: craterBiome });
       }
     }
 

@@ -92,8 +92,20 @@ export class ToolManager {
     const deltas = tool.onStrokeEnd();
     if (deltas && deltas.length > 0) {
       const toolType = usePlanetStore.getState().toolState.activeTool;
-      const type = toolType === 'biome' ? 'biome' : 'height';
-      this.undoManager.push({ type, deltas });
+
+      // Meteor tool produces both height and biome changes — wrap in a compound command
+      if (tool instanceof MeteorTool) {
+        const biomeDeltas = tool.getBiomeDeltas();
+        const commands: import('./UndoManager').UndoCommand[] = [{ type: 'height', deltas }];
+        if (biomeDeltas && biomeDeltas.length > 0) {
+          commands.push({ type: 'biome', deltas: biomeDeltas });
+        }
+        this.undoManager.push({ type: 'compound', commands });
+      } else {
+        const type = toolType === 'biome' ? 'biome' : 'height';
+        this.undoManager.push({ type, deltas });
+      }
+
       usePlanetStore.getState().bumpVersion();
     }
 
