@@ -7,7 +7,7 @@ export class Clouds {
   private material: THREE.ShaderMaterial;
 
   constructor(altitude: number = 0.02) {
-    const geometry = new THREE.SphereGeometry(1.0 + altitude, 64, 32);
+    const geometry = new THREE.SphereGeometry(1.0, 64, 32);
 
     this.material = new THREE.ShaderMaterial({
       vertexShader: cloudsVert,
@@ -25,6 +25,7 @@ export class Clouds {
     });
 
     this.mesh = new THREE.Mesh(geometry, this.material);
+    this.mesh.scale.setScalar(1.0 + altitude);
     this.mesh.renderOrder = 2;
   }
 
@@ -49,8 +50,8 @@ export class Clouds {
   }
 
   setAltitude(alt: number) {
-    this.mesh.geometry.dispose();
-    this.mesh.geometry = new THREE.SphereGeometry(1.0 + alt, 64, 32);
+    const scale = 1.0 + alt;
+    this.mesh.scale.setScalar(scale);
   }
 
   dispose() {
