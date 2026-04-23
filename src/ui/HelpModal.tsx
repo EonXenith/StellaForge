@@ -7,10 +7,10 @@ interface HelpModalProps {
 
 const shortcuts = [
   { keys: '1-5', desc: 'Select tools' },
+  { keys: 'Escape', desc: 'Deselect tool' },
   { keys: 'Click + Drag', desc: 'Use active tool' },
   { keys: 'Shift + Click', desc: 'Lower terrain (Raise tool)' },
-  { keys: 'Right Drag', desc: 'Pan camera' },
-  { keys: 'Left Drag (no tool)', desc: 'Orbit camera' },
+  { keys: 'Left Drag (off planet)', desc: 'Orbit camera' },
   { keys: 'Scroll', desc: 'Zoom' },
   { keys: 'Ctrl/Cmd + Z', desc: 'Undo' },
   { keys: 'Ctrl/Cmd + Shift + Z', desc: 'Redo' },

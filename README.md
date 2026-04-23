@@ -24,12 +24,13 @@ npm run preview
 |-------|--------|
 | Left Drag (on planet) | Use active tool |
 | Left Drag (off planet) | Orbit camera |
-| Right Drag | Pan camera |
 | Scroll | Zoom |
 | Shift + Click | Lower terrain (Raise tool) |
 | 1-5 | Select tools |
+| Escape | Deselect tool |
 | Ctrl/Cmd + Z | Undo |
 | Ctrl/Cmd + Shift + Z | Redo |
+| ~ (backtick) | Toggle FPS counter |
 
 ## Tools
 
