@@ -15,8 +15,10 @@ import { Toast } from './ui/Toast';
 import { StarPanel } from './ui/StarPanel';
 import { EnvironmentPanel } from './ui/EnvironmentPanel';
 import { ToolManager } from './tools/ToolManager';
+import { ExportModal } from './ui/ExportModal';
 import { PlanetSaveService } from './services/PlanetSaveService';
 import { ThumbnailService } from './services/ThumbnailService';
+import { ExportService } from './services/ExportService';
 import { TEMPLATES } from './templates/presets';
 import { flattenAdjacency } from './planet/Erosion';
 import * as THREE from 'three';
@@ -26,6 +28,8 @@ export default function App() {
   const sceneManagerRef = useRef<SceneManager | null>(null);
   const toolManagerRef = useRef<ToolManager | null>(null);
   const saveServiceRef = useRef<PlanetSaveService | null>(null);
+  const exportServiceRef = useRef<ExportService | null>(null);
+  const thumbnailServiceRef = useRef<ThumbnailService | null>(null);
   const [newPlanetOpen, setNewPlanetOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [fpsVisible, setFpsVisible] = useState(false);
@@ -94,7 +98,12 @@ export default function App() {
     // Thumbnail service
     const thumbSvc = new ThumbnailService(sm.renderer, sm.scene);
     svc.setThumbnailService(thumbSvc);
+    thumbnailServiceRef.current = thumbSvc;
     saveServiceRef.current = svc;
+
+    // Export service
+    const exportSvc = new ExportService(sm);
+    exportServiceRef.current = exportSvc;
 
     setSmReady(true);
 
@@ -295,9 +304,10 @@ export default function App() {
     return () => window.removeEventListener('stellaforge-erode', handler);
   }, [eroding]);
 
-  // Keyboard shortcuts: FPS toggle, Gallery, Save
+  // Keyboard shortcuts: FPS toggle, Gallery, Save, Export
   const galleryOpen = usePlanetStore((s) => s.galleryOpen);
   const saveDialogOpen = usePlanetStore((s) => s.saveDialogOpen);
+  const exportModalOpen = usePlanetStore((s) => s.exportModalOpen);
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       // Ignore if typing in an input
@@ -310,7 +320,7 @@ export default function App() {
       }
 
       // Only allow shortcuts when no modal is open
-      const anyModalOpen = newPlanetOpen || helpOpen || galleryOpen || saveDialogOpen;
+      const anyModalOpen = newPlanetOpen || helpOpen || galleryOpen || saveDialogOpen || exportModalOpen;
       if (anyModalOpen) return;
 
       if (e.key === 'g' || e.key === 'G') {
@@ -318,11 +328,14 @@ export default function App() {
       } else if ((e.metaKey || e.ctrlKey) && e.key === 's') {
         e.preventDefault();
         usePlanetStore.getState().setSaveDialogOpen(true);
+      } else if ((e.metaKey || e.ctrlKey) && e.key === 'e') {
+        e.preventDefault();
+        usePlanetStore.getState().setExportModalOpen(true);
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [newPlanetOpen, helpOpen, galleryOpen, saveDialogOpen]);
+  }, [newPlanetOpen, helpOpen, galleryOpen, saveDialogOpen, exportModalOpen]);
 
   // beforeunload guard
   const hasUnsavedChanges = usePlanetStore((s) => s.hasUnsavedChanges);
@@ -345,6 +358,44 @@ export default function App() {
     store.markUnsaved();
   }, []);
 
+  // Global drag-and-drop import
+  const [appDragOver, setAppDragOver] = useState(false);
+  const handleAppDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    if (e.dataTransfer.types.includes('Files')) {
+      setAppDragOver(true);
+    }
+  }, []);
+  const handleAppDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    // Only clear when leaving the root container
+    if (e.currentTarget === e.target || !e.currentTarget.contains(e.relatedTarget as Node)) {
+      setAppDragOver(false);
+    }
+  }, []);
+  const handleAppDrop = useCallback(async (e: React.DragEvent) => {
+    e.preventDefault();
+    setAppDragOver(false);
+    const file = e.dataTransfer.files[0];
+    if (!file) return;
+    if (!file.name.endsWith('.stellaforge.json') && !file.name.endsWith('.json')) {
+      usePlanetStore.getState().showToast('Please drop a .stellaforge.json file');
+      return;
+    }
+    const svc = saveServiceRef.current;
+    if (!svc) return;
+    try {
+      const text = await file.text();
+      const newId = await svc.importFromJSON(text);
+      const imported = (await svc.list()).find((e) => e.id === newId);
+      usePlanetStore.getState().showToast(`Imported "${imported?.name ?? 'planet'}"`);
+      // Open gallery to show the imported planet
+      usePlanetStore.getState().setGalleryOpen(true);
+    } catch (err) {
+      usePlanetStore.getState().showToast((err as Error).message);
+    }
+  }, []);
+
   const handleScreenshot = useCallback(() => {
     const sm = sceneManagerRef.current;
     if (!sm) return;
@@ -357,7 +408,12 @@ export default function App() {
   }, []);
 
   return (
-    <div className="w-screen h-screen relative">
+    <div
+      className="w-screen h-screen relative"
+      onDragOver={handleAppDragOver}
+      onDragLeave={handleAppDragLeave}
+      onDrop={handleAppDrop}
+    >
       <div ref={containerRef} className="absolute inset-0" />
       <TopBar
         onNewPlanet={() => setNewPlanetOpen(true)}
@@ -383,7 +439,20 @@ export default function App() {
           <SaveDialog saveService={saveServiceRef.current} />
         </>
       )}
+      {exportServiceRef.current && (
+        <ExportModal
+          exportService={exportServiceRef.current}
+          thumbnailService={thumbnailServiceRef.current}
+        />
+      )}
       <Toast />
+      {appDragOver && (
+        <div className="absolute inset-0 z-[100] flex items-center justify-center bg-blue-900/40 border-2 border-dashed border-blue-400 pointer-events-none">
+          <div className="flex flex-col items-center gap-2">
+            <p className="text-blue-200 text-lg font-medium">Drop .stellaforge.json to import</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

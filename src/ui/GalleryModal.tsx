@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { X, Search, Globe, Copy, Pencil, Trash2 } from 'lucide-react';
+import { X, Search, Globe, Copy, Pencil, Trash2, Upload } from 'lucide-react';
 import { usePlanetStore } from '@/store/usePlanetStore';
 import type { PlanetSaveService, PlanetSaveListEntry } from '@/services/PlanetSaveService';
 
@@ -32,16 +32,18 @@ export function GalleryModal({ saveService }: GalleryModalProps) {
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [loadConfirmId, setLoadConfirmId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
 
   const modalRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const objectUrls = useRef<string[]>([]);
 
   // Load entries on open
   useEffect(() => {
     if (!open) return;
     refreshList();
-    // Focus search on open
     setTimeout(() => searchRef.current?.focus(), 100);
   }, [open]);
 
@@ -54,7 +56,6 @@ export function GalleryModal({ saveService }: GalleryModalProps) {
   }, []);
 
   const refreshList = useCallback(async () => {
-    // Revoke old URLs
     for (const url of objectUrls.current) URL.revokeObjectURL(url);
     objectUrls.current = [];
     try {
@@ -65,7 +66,7 @@ export function GalleryModal({ saveService }: GalleryModalProps) {
     }
   }, [saveService]);
 
-  // Focus trap
+  // Focus trap + Escape
   useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => {
@@ -96,6 +97,65 @@ export function GalleryModal({ saveService }: GalleryModalProps) {
     return () => window.removeEventListener('keydown', handler);
   }, [open, setOpen, deleteConfirmId, loadConfirmId, renamingId]);
 
+  // ── Import logic ────────────────────────────────────────
+
+  const handleImportFile = useCallback(async (file: File) => {
+    if (importing) return;
+    if (!file.name.endsWith('.stellaforge.json') && !file.name.endsWith('.json')) {
+      setError('Please select a .stellaforge.json file');
+      return;
+    }
+    setImporting(true);
+    setError(null);
+    try {
+      const text = await file.text();
+      const newId = await saveService.importFromJSON(text);
+      await refreshList();
+      // Find the imported entry to show name in toast
+      const imported = (await saveService.list()).find((e) => e.id === newId);
+      usePlanetStore.getState().showToast(`Imported "${imported?.name ?? 'planet'}"`);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setImporting(false);
+    }
+  }, [saveService, refreshList, importing]);
+
+  const handleFileInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) handleImportFile(file);
+    // Reset input so the same file can be selected again
+    e.target.value = '';
+  }, [handleImportFile]);
+
+  // Drag-and-drop handlers
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.dataTransfer.types.includes('Files')) {
+      setDragOver(true);
+    }
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // Only clear if we're leaving the modal container
+    if (modalRef.current && !modalRef.current.contains(e.relatedTarget as Node)) {
+      setDragOver(false);
+    }
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(false);
+    const file = e.dataTransfer.files[0];
+    if (file) handleImportFile(file);
+  }, [handleImportFile]);
+
+  // ── Load / actions ──────────────────────────────────────
+
   const handleLoad = useCallback(async (id: string) => {
     if (hasUnsavedChanges && !loadConfirmId) {
       setLoadConfirmId(id);
@@ -105,7 +165,6 @@ export function GalleryModal({ saveService }: GalleryModalProps) {
       const store = usePlanetStore.getState();
       store.setIsLoading(true);
       await saveService.load(id);
-      // Find entry to get name
       const entry = entries.find((e) => e.id === id);
       store.setCurrentSave(id, entry?.name ?? null);
       store.markSaved();
@@ -134,7 +193,6 @@ export function GalleryModal({ saveService }: GalleryModalProps) {
     if (!trimmed || trimmed.length > 64) return;
     try {
       await saveService.rename(renamingId, trimmed);
-      // Update current save name if renaming the active save
       const store = usePlanetStore.getState();
       if (store.currentSaveId === renamingId) {
         store.setCurrentSave(renamingId, trimmed);
@@ -149,7 +207,6 @@ export function GalleryModal({ saveService }: GalleryModalProps) {
   const handleDelete = useCallback(async (id: string) => {
     try {
       await saveService.delete(id);
-      // Clear current save if deleting it
       const store = usePlanetStore.getState();
       if (store.currentSaveId === id) {
         store.setCurrentSave(null, null);
@@ -181,13 +238,35 @@ export function GalleryModal({ saveService }: GalleryModalProps) {
         role="dialog"
         aria-modal="true"
         aria-label="Planet Gallery"
-        className="bg-gray-900 border border-gray-700 rounded-xl flex flex-col"
+        className="bg-gray-900 border border-gray-700 rounded-xl flex flex-col relative"
         style={{ width: '80vw', height: '80vh', maxWidth: '1200px', maxHeight: '900px' }}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
       >
         {/* Header */}
         <div className="flex items-center gap-3 px-6 py-4 border-b border-gray-700 shrink-0">
           <h2 className="text-white font-semibold text-lg">My Planets</h2>
           <div className="flex-1" />
+
+          {/* Import button */}
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={importing}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white text-xs rounded transition-colors disabled:opacity-50"
+            aria-label="Import planet"
+          >
+            <Upload size={14} />
+            {importing ? 'Importing...' : 'Import'}
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".json,.stellaforge.json"
+            onChange={handleFileInputChange}
+            className="hidden"
+          />
+
           <div className="relative">
             <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500" />
             <input
@@ -251,6 +330,16 @@ export function GalleryModal({ saveService }: GalleryModalProps) {
           )}
         </div>
 
+        {/* Drag-and-drop overlay */}
+        {dragOver && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-blue-900/40 border-2 border-dashed border-blue-400 rounded-xl pointer-events-none">
+            <div className="flex flex-col items-center gap-2">
+              <Upload size={48} className="text-blue-400" />
+              <p className="text-blue-200 text-sm font-medium">Drop .stellaforge.json to import</p>
+            </div>
+          </div>
+        )}
+
         {/* Delete confirmation dialog */}
         {deleteConfirmId && (
           <ConfirmDialog
@@ -284,17 +373,9 @@ export function GalleryModal({ saveService }: GalleryModalProps) {
 // ---------------------------------------------------------------------------
 
 function PlanetCard({
-  entry,
-  thumbnailUrl,
-  isRenaming,
-  renameValue,
-  onRenameChange,
-  onRenameStart,
-  onRenameSubmit,
-  onRenameCancel,
-  onLoad,
-  onDuplicate,
-  onDeleteRequest,
+  entry, thumbnailUrl, isRenaming, renameValue,
+  onRenameChange, onRenameStart, onRenameSubmit, onRenameCancel,
+  onLoad, onDuplicate, onDeleteRequest,
 }: {
   entry: PlanetSaveListEntry;
   thumbnailUrl: string | null;
@@ -317,10 +398,7 @@ function PlanetCard({
   return (
     <div className="group flex flex-col bg-gray-800 rounded-lg border border-gray-700 overflow-hidden hover:border-gray-500 transition-colors">
       {/* Thumbnail */}
-      <div
-        className="relative aspect-square cursor-pointer overflow-hidden"
-        onClick={onLoad}
-      >
+      <div className="relative aspect-square cursor-pointer overflow-hidden" onClick={onLoad}>
         {thumbnailUrl ? (
           <img
             src={thumbnailUrl}
@@ -332,7 +410,6 @@ function PlanetCard({
             <Globe size={32} className="text-gray-500" />
           </div>
         )}
-        {/* Action overlay on hover */}
         <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
           <button
             onClick={(e) => { e.stopPropagation(); onLoad(); }}
@@ -395,19 +472,10 @@ function PlanetCard({
 // ---------------------------------------------------------------------------
 
 function ConfirmDialog({
-  title,
-  message,
-  confirmLabel,
-  confirmClass,
-  onConfirm,
-  onCancel,
+  title, message, confirmLabel, confirmClass, onConfirm, onCancel,
 }: {
-  title: string;
-  message: string;
-  confirmLabel: string;
-  confirmClass: string;
-  onConfirm: () => void;
-  onCancel: () => void;
+  title: string; message: string; confirmLabel: string; confirmClass: string;
+  onConfirm: () => void; onCancel: () => void;
 }) {
   return (
     <div className="absolute inset-0 z-60 flex items-center justify-center bg-black/40 rounded-xl">

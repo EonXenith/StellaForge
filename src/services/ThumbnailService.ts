@@ -1,11 +1,11 @@
 import * as THREE from 'three';
+import { renderToBlob } from './renderToBlob';
 
 /**
  * Captures 256x256 PNG thumbnails of the planet for save slots.
  *
  * Reuses a single WebGLRenderTarget across calls.
- * Saves and restores all renderer state so capture() is invisible
- * to the main render loop.
+ * Delegates rendering to the shared renderToBlob helper.
  */
 export class ThumbnailService {
   private renderer: THREE.WebGLRenderer;
@@ -44,7 +44,6 @@ export class ThumbnailService {
   /**
    * Capture the current scene as a 256x256 PNG Blob.
    *
-   * - Preserves all renderer state (render target, autoClear, clear color/alpha).
    * - Rejects if the GL context is lost.
    * - Queues if another capture is in flight.
    */
@@ -75,43 +74,13 @@ export class ThumbnailService {
     this.capturing = true;
 
     try {
-      // Save renderer state
-      const prevTarget = this.renderer.getRenderTarget();
-      const prevAutoClear = this.renderer.autoClear;
-      const prevClearColor = new THREE.Color();
-      this.renderer.getClearColor(prevClearColor);
-      const prevClearAlpha = this.renderer.getClearAlpha();
-
-      // Render to our target
-      this.renderer.setRenderTarget(this.target);
-      this.renderer.autoClear = true;
-      this.renderer.render(this.scene, this.camera);
-
-      // Read pixels
-      const size = ThumbnailService.SIZE;
-      const pixels = new Uint8Array(size * size * 4);
-      this.renderer.readRenderTargetPixels(this.target, 0, 0, size, size, pixels);
-
-      // Restore renderer state
-      this.renderer.setRenderTarget(prevTarget);
-      this.renderer.autoClear = prevAutoClear;
-      this.renderer.setClearColor(prevClearColor, prevClearAlpha);
-
-      // Convert RGBA pixels → PNG via OffscreenCanvas
-      // WebGL reads bottom-to-top, so we need to flip Y
-      const canvas = new OffscreenCanvas(size, size);
-      const ctx = canvas.getContext('2d')!;
-      const imageData = ctx.createImageData(size, size);
-
-      for (let y = 0; y < size; y++) {
-        const srcRow = (size - 1 - y) * size * 4;
-        const dstRow = y * size * 4;
-        imageData.data.set(pixels.subarray(srcRow, srcRow + size * 4), dstRow);
-      }
-
-      ctx.putImageData(imageData, 0, 0);
-      const blob = await canvas.convertToBlob({ type: 'image/png' });
-      return blob;
+      return await renderToBlob({
+        renderer: this.renderer,
+        scene: this.scene,
+        camera: this.camera,
+        size: ThumbnailService.SIZE,
+        target: this.target,
+      });
     } finally {
       this.capturing = false;
     }

@@ -1,5 +1,10 @@
 import { openDB, DBSchema, IDBPDatabase } from 'idb';
 import type { ThumbnailService } from './ThumbnailService';
+import {
+  base64ToArrayBuffer,
+  base64DataUrlToBlob,
+} from './ExportService';
+import type { StellaForgeJSON } from './ExportService';
 import type { TerrainParams } from '@/planet/TerrainGenerator';
 import type {
   BiomeDefinition,
@@ -15,6 +20,30 @@ import type {
 
 // ---------------------------------------------------------------------------
 // Schema versioning
+// ---------------------------------------------------------------------------
+//
+// Save format overview:
+//   Each planet is stored as a PlanetSaveEnvelope in the "planets" object store
+//   of the "stellaforge" IndexedDB database (version 1).
+//
+// Versioning rules:
+//   - CURRENT_SAVE_VERSION is the latest schema version written by the app.
+//   - Every envelope carries a `version` field stamped at save time.
+//   - On load/import, envelopes are run through the migration pipeline:
+//     version 1 → migrations[1] → version 2 → migrations[2] → ... → current.
+//   - If a migration is missing, load throws rather than silently dropping data.
+//
+// Adding a persisted config key:
+//   1. Add the key to SAVED_CONFIG_KEYS and PlanetSaveConfig.
+//   2. Bump CURRENT_SAVE_VERSION.
+//   3. Write a migration that sets a sensible default for the new key
+//      so older saves remain loadable.
+//
+// JSON portability:
+//   The JSON export format (StellaForgeJSON in ExportService.ts) mirrors
+//   the envelope but encodes ArrayBuffers as base64 strings and the
+//   thumbnail as a base64 data-URL. On import, buffers are decoded and
+//   validated (40962×4 bytes for heights, 40962 bytes for biomes).
 // ---------------------------------------------------------------------------
 
 export const CURRENT_SAVE_VERSION = 1;
@@ -296,6 +325,146 @@ export class PlanetSaveService {
   async getRaw(id: string): Promise<PlanetSaveEnvelope | undefined> {
     const db = await getDB();
     return db.get('planets', id);
+  }
+
+  // ── JSON Import ────────────────────────────────────────────
+
+  /** Maximum allowed file size for import (10MB). */
+  static readonly MAX_IMPORT_SIZE = 10 * 1024 * 1024;
+
+  /**
+   * Import a planet from a .stellaforge.json file.
+   *
+   * Validates structure, decodes base64 buffers, assigns a new UUID,
+   * deduplicates name, and writes to IndexedDB.
+   *
+   * @returns The new save ID.
+   */
+  async importFromJSON(input: Blob | string): Promise<string> {
+    // Size check
+    const raw = typeof input === 'string' ? input : await input.text();
+    if (raw.length > PlanetSaveService.MAX_IMPORT_SIZE) {
+      throw new Error('File too large (max 10MB)');
+    }
+
+    // Parse JSON
+    let data: StellaForgeJSON;
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      throw new Error('Not a valid JSON file');
+    }
+
+    // Validate schemaType
+    if (!data || typeof data !== 'object') {
+      throw new Error('Not a valid StellaForge file');
+    }
+    if (data.schemaType !== SCHEMA_TYPE) {
+      throw new Error(
+        `Not a valid StellaForge file (expected schemaType "${SCHEMA_TYPE}", got "${data.schemaType ?? 'undefined'}")`,
+      );
+    }
+
+    // Validate version
+    if (typeof data.version !== 'number' || data.version < 1) {
+      throw new Error('Not a valid StellaForge file (missing version)');
+    }
+    if (data.version > CURRENT_SAVE_VERSION) {
+      throw new Error(
+        `Unsupported version: ${data.version}. Please update StellaForge.`,
+      );
+    }
+
+    // Validate required fields
+    if (!data.name || typeof data.name !== 'string') {
+      throw new Error('Not a valid StellaForge file (missing name)');
+    }
+    if (!data.heights_b64 || typeof data.heights_b64 !== 'string') {
+      throw new Error('Not a valid StellaForge file (missing height data)');
+    }
+    if (!data.biomes_b64 || typeof data.biomes_b64 !== 'string') {
+      throw new Error('Not a valid StellaForge file (missing biome data)');
+    }
+
+    // Decode buffers
+    let heightsBuffer: ArrayBuffer;
+    let biomesBuffer: ArrayBuffer;
+    try {
+      heightsBuffer = base64ToArrayBuffer(data.heights_b64);
+      biomesBuffer = base64ToArrayBuffer(data.biomes_b64);
+    } catch {
+      throw new Error('Not a valid StellaForge file (corrupt buffer data)');
+    }
+
+    // Validate buffer sizes (icosphere-6 = 40962 vertices)
+    const expectedHeightBytes = 40962 * 4; // Float32
+    const expectedBiomeBytes = 40962;      // Uint8
+    if (heightsBuffer.byteLength !== expectedHeightBytes) {
+      throw new Error(
+        `Corrupt file: height data is ${heightsBuffer.byteLength} bytes, expected ${expectedHeightBytes}`,
+      );
+    }
+    if (biomesBuffer.byteLength !== expectedBiomeBytes) {
+      throw new Error(
+        `Corrupt file: biome data is ${biomesBuffer.byteLength} bytes, expected ${expectedBiomeBytes}`,
+      );
+    }
+
+    // Decode thumbnail
+    let thumbnail: Blob | null = null;
+    if (data.thumbnail_b64 && typeof data.thumbnail_b64 === 'string') {
+      try {
+        thumbnail = base64DataUrlToBlob(data.thumbnail_b64);
+      } catch {
+        // Non-critical — import without thumbnail
+      }
+    }
+
+    // Extract config (apply allowlist)
+    const config = {} as Record<string, unknown>;
+    for (const key of SAVED_CONFIG_KEYS) {
+      if (data.config && (data.config as unknown as Record<string, unknown>)[key] !== undefined) {
+        config[key] = (data.config as unknown as Record<string, unknown>)[key];
+      }
+    }
+
+    // Deduplicate name
+    const existingNames = (await this.list()).map((e) => e.name);
+    let importName = data.name;
+    if (existingNames.includes(importName)) {
+      importName = `${importName} (imported)`;
+      // If that also exists, add a number
+      let counter = 2;
+      while (existingNames.includes(importName)) {
+        importName = `${data.name} (imported ${counter})`;
+        counter++;
+      }
+    }
+
+    // Assign new UUID and write to IDB
+    const now = Date.now();
+    const newId = crypto.randomUUID();
+
+    const envelope: PlanetSaveEnvelope = {
+      schemaType: SCHEMA_TYPE,
+      version: CURRENT_SAVE_VERSION,
+      id: newId,
+      name: importName,
+      createdAt: data.createdAt ?? now,
+      updatedAt: now,
+      thumbnail,
+      config: config as unknown as PlanetSaveConfig,
+      heights: heightsBuffer,
+      biomes: biomesBuffer,
+    };
+
+    // Run migration pipeline (for future version upgrades)
+    const migrated = migrate(envelope);
+
+    const db = await getDB();
+    await db.put('planets', migrated);
+
+    return newId;
   }
 
   /** Get lightweight metadata for a save. */

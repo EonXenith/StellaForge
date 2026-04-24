@@ -1,4 +1,4 @@
-import { Camera, HelpCircle, Plus, FolderOpen, Save } from 'lucide-react';
+import { Camera, Download, HelpCircle, Plus, FolderOpen, Save } from 'lucide-react';
 import { FpsCounter } from './FpsCounter';
 import { usePlanetStore } from '@/store/usePlanetStore';
 import { SceneManager } from '@/scene/SceneManager';
@@ -14,6 +14,7 @@ interface TopBarProps {
 export function TopBar({ onNewPlanet, onScreenshot, onHelp, sceneManager, fpsVisible }: TopBarProps) {
   const setGalleryOpen = usePlanetStore((s) => s.setGalleryOpen);
   const setSaveDialogOpen = usePlanetStore((s) => s.setSaveDialogOpen);
+  const setExportModalOpen = usePlanetStore((s) => s.setExportModalOpen);
   const currentSaveName = usePlanetStore((s) => s.currentSaveName);
   const hasUnsavedChanges = usePlanetStore((s) => s.hasUnsavedChanges);
 
@@ -50,6 +51,14 @@ export function TopBar({ onNewPlanet, onScreenshot, onHelp, sceneManager, fpsVis
       >
         <FolderOpen size={14} />
         Gallery
+      </button>
+      <button
+        onClick={() => setExportModalOpen(true)}
+        className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white text-xs rounded transition-colors"
+        aria-label="Export PNG"
+      >
+        <Download size={14} />
+        Export
       </button>
       <button
         onClick={onScreenshot}

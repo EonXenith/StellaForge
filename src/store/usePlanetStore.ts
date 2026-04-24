@@ -117,6 +117,7 @@ interface PlanetStore {
   version: number;
   galleryOpen: boolean;
   saveDialogOpen: boolean;
+  exportModalOpen: boolean;
   currentSaveId: string | null;
   currentSaveName: string | null;
   hasUnsavedChanges: boolean;
@@ -143,6 +144,7 @@ interface PlanetStore {
   bumpVersion: () => void;
   setGalleryOpen: (open: boolean) => void;
   setSaveDialogOpen: (open: boolean) => void;
+  setExportModalOpen: (open: boolean) => void;
   setCurrentSave: (id: string | null, name: string | null) => void;
   markUnsaved: () => void;
   markSaved: () => void;
@@ -215,6 +217,7 @@ export const usePlanetStore = create<PlanetStore>((set) => ({
   version: 0,
   galleryOpen: false,
   saveDialogOpen: false,
+  exportModalOpen: false,
   currentSaveId: null,
   currentSaveName: null,
   hasUnsavedChanges: false,
@@ -268,6 +271,7 @@ export const usePlanetStore = create<PlanetStore>((set) => ({
   bumpVersion: () => set((s) => ({ version: s.version + 1, hasUnsavedChanges: true })),
   setGalleryOpen: (open) => set({ galleryOpen: open }),
   setSaveDialogOpen: (open) => set({ saveDialogOpen: open }),
+  setExportModalOpen: (open) => set({ exportModalOpen: open }),
   setCurrentSave: (id, name) => set({ currentSaveId: id, currentSaveName: name }),
   markUnsaved: () => set({ hasUnsavedChanges: true }),
   markSaved: () => set({ hasUnsavedChanges: false }),
