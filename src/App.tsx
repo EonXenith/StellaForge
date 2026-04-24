@@ -12,6 +12,9 @@ import { HelpModal } from './ui/HelpModal';
 import { GalleryModal } from './ui/GalleryModal';
 import { SaveDialog } from './ui/SaveDialog';
 import { Toast } from './ui/Toast';
+import { WelcomeModal, isFirstVisit } from './ui/WelcomeModal';
+import { CameraHint } from './ui/CameraHint';
+import { GuidedCallout } from './ui/GuidedCallout';
 import { StarPanel } from './ui/StarPanel';
 import { EnvironmentPanel } from './ui/EnvironmentPanel';
 import { ToolManager } from './tools/ToolManager';
@@ -32,6 +35,9 @@ export default function App() {
   const thumbnailServiceRef = useRef<ThumbnailService | null>(null);
   const [newPlanetOpen, setNewPlanetOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [wasFirstVisit] = useState(() => isFirstVisit());
+  const [welcomeOpen, setWelcomeOpen] = useState(() => isFirstVisit());
+  const [showGuidedCallout, setShowGuidedCallout] = useState(false);
   const [fpsVisible, setFpsVisible] = useState(false);
   const [smReady, setSmReady] = useState(false);
 
@@ -322,7 +328,7 @@ export default function App() {
       }
 
       // Only allow shortcuts when no modal is open
-      const anyModalOpen = newPlanetOpen || helpOpen || galleryOpen || saveDialogOpen || exportModalOpen;
+      const anyModalOpen = newPlanetOpen || helpOpen || welcomeOpen || galleryOpen || saveDialogOpen || exportModalOpen;
       if (anyModalOpen) return;
 
       if (e.key === 'g' || e.key === 'G') {
@@ -337,7 +343,7 @@ export default function App() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [newPlanetOpen, helpOpen, galleryOpen, saveDialogOpen, exportModalOpen]);
+  }, [newPlanetOpen, helpOpen, welcomeOpen, galleryOpen, saveDialogOpen, exportModalOpen]);
 
   // beforeunload guard
   const hasUnsavedChanges = usePlanetStore((s) => s.hasUnsavedChanges);
@@ -398,6 +404,15 @@ export default function App() {
     }
   }, []);
 
+  const handleWelcomeClose = useCallback(() => {
+    setWelcomeOpen(false);
+  }, []);
+
+  const handleShowMe = useCallback(() => {
+    setShowGuidedCallout(true);
+    usePlanetStore.getState().setToolState({ activeTool: 'raise' });
+  }, []);
+
   const handleScreenshot = useCallback(() => {
     const sm = sceneManagerRef.current;
     if (!sm) return;
@@ -428,13 +443,18 @@ export default function App() {
       <BiomePalette />
       <StarPanel />
       <EnvironmentPanel />
-      <Toolbar />
+      <Toolbar onHelp={() => setWelcomeOpen(true)} />
       <NewPlanetModal
         open={newPlanetOpen}
         onClose={() => setNewPlanetOpen(false)}
         onApply={handleNewPlanet}
       />
       <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
+      <WelcomeModal
+        open={welcomeOpen}
+        onClose={handleWelcomeClose}
+        onShowMe={wasFirstVisit && !showGuidedCallout ? handleShowMe : undefined}
+      />
       {saveServiceRef.current && (
         <>
           <GalleryModal saveService={saveServiceRef.current} />
@@ -447,6 +467,8 @@ export default function App() {
           thumbnailService={thumbnailServiceRef.current}
         />
       )}
+      <CameraHint />
+      <GuidedCallout enabled={showGuidedCallout} />
       <Toast />
       {appDragOver && (
         <div className="absolute inset-0 z-[100] flex items-center justify-center bg-blue-900/40 border-2 border-dashed border-blue-400 pointer-events-none">
