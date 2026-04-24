@@ -17,14 +17,17 @@ export function Section({
 
   return (
     <div className="flex flex-col gap-1.5">
-      <button
+      <div
+        role="button"
+        tabIndex={0}
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-1 text-xs font-semibold text-gray-300 hover:text-white transition-colors w-full"
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(!open); } }}
+        className="flex items-center gap-1 text-xs font-semibold text-gray-300 hover:text-white transition-colors w-full cursor-pointer select-none"
       >
         {open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
         <span className="flex-1 text-left">{title}</span>
         {right && <span onClick={(e) => e.stopPropagation()}>{right}</span>}
-      </button>
+      </div>
       {open && <div className="flex flex-col gap-1.5 pl-1">{children}</div>}
     </div>
   );

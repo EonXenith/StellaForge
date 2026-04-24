@@ -111,10 +111,12 @@ interface PlanetStore {
   toolState: ToolState;
   selectedBiomeId: number;
   meteorCraterBiomeId: number | null; // null = use selectedBiomeId
+  isLoading: boolean;
   eroding: boolean;
   erosionProgress: number;
   version: number;
 
+  setIsLoading: (loading: boolean) => void;
   setTerrainParams: (params: Partial<TerrainParams>) => void;
   setStarParams: (params: Partial<StarParams>) => void;
   setAtmosphereParams: (params: Partial<AtmosphereParams>) => void;
@@ -194,10 +196,12 @@ export const usePlanetStore = create<PlanetStore>((set) => ({
   },
   selectedBiomeId: 0,
   meteorCraterBiomeId: null,
+  isLoading: false,
   eroding: false,
   erosionProgress: 0,
   version: 0,
 
+  setIsLoading: (loading) => set({ isLoading: loading }),
   setTerrainParams: (params) =>
     set((s) => ({ terrainParams: { ...s.terrainParams, ...params } })),
   setStarParams: (params) =>

@@ -67,15 +67,18 @@ export default function App() {
 
   // React to terrain param changes
   const terrainParams = usePlanetStore((s) => s.terrainParams);
+  const isLoading = usePlanetStore((s) => s.isLoading);
   useEffect(() => {
     const sm = sceneManagerRef.current;
     if (!sm) return;
+    // Skip regeneration during save hydration — data is already loaded
+    if (isLoading) return;
     sm.planet.material.uniforms.uHeightScale.value = terrainParams.heightScale;
     sm.planet.material.uniforms.uRadius.value = terrainParams.radius;
     generateTerrain(sm.planetData, terrainParams);
     const biomes = usePlanetStore.getState().biomes;
     assignBiomes(sm.planetData, biomes);
-  }, [terrainParams]);
+  }, [terrainParams, isLoading]);
 
   // React to biome changes
   const biomes = usePlanetStore((s) => s.biomes);
