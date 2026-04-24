@@ -10,6 +10,9 @@ export class CameraController {
   private zoomMin = 1.5;
   private zoomMax = 10;
 
+  /** When true, camera ignores all mouse drag input (tool stroke is active). */
+  public enabled = true;
+
   constructor(
     private camera: THREE.PerspectiveCamera,
     private domElement: HTMLElement
@@ -27,7 +30,11 @@ export class CameraController {
   }
 
   private onMouseDown = (e: MouseEvent) => {
-    if (e.button === 0) {
+    if (!this.enabled) return;
+    // Right-click (button 2) = orbit rotate
+    // Left-click (button 0) = orbit rotate only if no tool will handle it
+    //   (ToolManager disables the controller before left-click reaches here when a tool is active)
+    if (e.button === 2 || e.button === 0) {
       this.isDragging = true;
     }
     this.lastMouse = { x: e.clientX, y: e.clientY };
@@ -38,7 +45,7 @@ export class CameraController {
     const dy = e.clientY - this.lastMouse.y;
     this.lastMouse = { x: e.clientX, y: e.clientY };
 
-    if (this.isDragging) {
+    if (this.isDragging && this.enabled) {
       this.rotateVelocity.theta = -dx * 0.005;
       this.rotateVelocity.phi = -dy * 0.005;
       this.spherical.theta += this.rotateVelocity.theta;

@@ -39,6 +39,8 @@ export class ToolManager {
     this.domElement.addEventListener('pointerdown', this.onPointerDown);
     this.domElement.addEventListener('pointermove', this.onPointerMove);
     this.domElement.addEventListener('pointerup', this.onPointerUp);
+    // Safety net: re-enable camera if pointer released outside canvas
+    window.addEventListener('pointerup', this.onWindowPointerUp);
     window.addEventListener('keydown', this.onKeyDown);
     window.addEventListener('keyup', this.onKeyUp);
   }
@@ -52,8 +54,8 @@ export class ToolManager {
     const hit = this.raycast(e);
     if (!hit) return;
 
-    // Prevent camera orbit when tool is active
-    e.stopPropagation();
+    // Disable camera orbit for the duration of this tool stroke
+    this.sceneManager.cameraController.enabled = false;
     this.domElement.setPointerCapture(e.pointerId);
 
     this.isStroking = true;
@@ -84,6 +86,7 @@ export class ToolManager {
   private onPointerUp = (e: PointerEvent) => {
     if (!this.isStroking) return;
     this.isStroking = false;
+    this.sceneManager.cameraController.enabled = true;
     this.domElement.releasePointerCapture(e.pointerId);
 
     const tool = this.getActiveTool();
@@ -110,6 +113,15 @@ export class ToolManager {
     }
 
     this.sceneManager.planet.clearBrushWeights();
+  };
+
+  /** Safety net: if pointer is released outside the canvas, always re-enable camera. */
+  private onWindowPointerUp = () => {
+    if (this.isStroking) {
+      this.isStroking = false;
+      this.sceneManager.cameraController.enabled = true;
+      this.sceneManager.planet.clearBrushWeights();
+    }
   };
 
   private onKeyDown = (e: KeyboardEvent) => {
@@ -199,6 +211,7 @@ export class ToolManager {
     this.domElement.removeEventListener('pointerdown', this.onPointerDown);
     this.domElement.removeEventListener('pointermove', this.onPointerMove);
     this.domElement.removeEventListener('pointerup', this.onPointerUp);
+    window.removeEventListener('pointerup', this.onWindowPointerUp);
     window.removeEventListener('keydown', this.onKeyDown);
     window.removeEventListener('keyup', this.onKeyUp);
   }
