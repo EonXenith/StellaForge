@@ -189,6 +189,8 @@ export default function App() {
     sm.ocean.setSeaLevel(oceanParams.seaLevel);
     sm.ocean.setColors(oceanParams.colorShallow, oceanParams.colorDeep);
     sm.ocean.setWaveParams(oceanParams.waveSpeed, oceanParams.waveAmplitude);
+    // Sync sea level to planet shader for water shading on terrain
+    sm.planet.material.uniforms.uSeaLevel.value = oceanParams.seaLevel;
   }, [oceanParams]);
 
   // Clouds

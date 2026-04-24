@@ -58,6 +58,8 @@ export class Planet {
         uAmbient: { value: 0.15 },
         uCityLightColor: { value: new THREE.Vector3(1.0, 0.8, 0.4) },
         uDayNightEnabled: { value: 0.0 },
+        uSeaLevel: { value: 0.0 },
+        uSnowLevel: { value: 0.75 },
       },
     });
 
