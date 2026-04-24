@@ -17,13 +17,14 @@ async function main() {
 
   // Intercept downloads
   const downloadDir = path.resolve('test-exports');
-  if (!fs.existsSync(downloadDir)) fs.mkdirSync(downloadDir);
+  if (!fs.existsSync(downloadDir)) fs.mkdirSync(downloadDir, { recursive: true });
 
-  // Enable download behavior
+  // Enable download behavior via Browser.setDownloadBehavior (CDP)
   const client = await page.createCDPSession();
-  await client.send('Page.setDownloadBehavior', {
+  await client.send('Browser.setDownloadBehavior', {
     behavior: 'allow',
     downloadPath: downloadDir,
+    eventsEnabled: true,
   });
 
   page.on('console', (msg) => console.log(`[browser] ${msg.text()}`));
@@ -150,9 +151,13 @@ async function main() {
   await page.keyboard.press('Escape');
   await wait(300);
 
-  // Check download exists
+  // Check download exists (wait briefly for download to complete)
   console.log('\n8. Checking downloaded file...');
-  const files = fs.readdirSync(downloadDir).filter(f => f.endsWith('.png'));
+  await wait(2000);
+  let files = [];
+  try {
+    files = fs.readdirSync(downloadDir).filter(f => f.endsWith('.png'));
+  } catch { /* directory may not exist */ }
   if (files.length > 0) {
     const lastFile = files[files.length - 1];
     const stat = fs.statSync(path.join(downloadDir, lastFile));
