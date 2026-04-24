@@ -7,13 +7,15 @@ interface HelpModalProps {
 
 const shortcuts = [
   { keys: '1-5', desc: 'Select tools' },
-  { keys: 'Escape', desc: 'Deselect tool' },
+  { keys: 'Escape', desc: 'Deselect tool / Close modal' },
   { keys: 'Click + Drag', desc: 'Use active tool' },
   { keys: 'Shift + Click', desc: 'Lower terrain (Raise tool)' },
   { keys: 'Left Drag (off planet)', desc: 'Orbit camera' },
   { keys: 'Scroll', desc: 'Zoom' },
   { keys: 'Ctrl/Cmd + Z', desc: 'Undo' },
   { keys: 'Ctrl/Cmd + Shift + Z', desc: 'Redo' },
+  { keys: 'Ctrl/Cmd + S', desc: 'Save planet' },
+  { keys: 'G', desc: 'Open gallery' },
   { keys: '~', desc: 'Toggle FPS counter' },
 ];
 

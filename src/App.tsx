@@ -9,9 +9,14 @@ import { Toolbar } from './ui/Toolbar';
 import { TopBar } from './ui/TopBar';
 import { NewPlanetModal } from './ui/NewPlanetModal';
 import { HelpModal } from './ui/HelpModal';
+import { GalleryModal } from './ui/GalleryModal';
+import { SaveDialog } from './ui/SaveDialog';
+import { Toast } from './ui/Toast';
 import { StarPanel } from './ui/StarPanel';
 import { EnvironmentPanel } from './ui/EnvironmentPanel';
 import { ToolManager } from './tools/ToolManager';
+import { PlanetSaveService } from './services/PlanetSaveService';
+import { ThumbnailService } from './services/ThumbnailService';
 import { TEMPLATES } from './templates/presets';
 import { flattenAdjacency } from './planet/Erosion';
 import * as THREE from 'three';
@@ -20,12 +25,13 @@ export default function App() {
   const containerRef = useRef<HTMLDivElement>(null);
   const sceneManagerRef = useRef<SceneManager | null>(null);
   const toolManagerRef = useRef<ToolManager | null>(null);
+  const saveServiceRef = useRef<PlanetSaveService | null>(null);
   const [newPlanetOpen, setNewPlanetOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [fpsVisible, setFpsVisible] = useState(false);
   const [smReady, setSmReady] = useState(false);
 
-  // Initialize scene
+  // Initialize scene + services
   useEffect(() => {
     if (!containerRef.current) return;
     const sm = new SceneManager(containerRef.current);
@@ -57,6 +63,39 @@ export default function App() {
     // Tool manager
     const tm = new ToolManager(sm);
     toolManagerRef.current = tm;
+
+    // Save service with constructor injection
+    const svc = new PlanetSaveService({
+      getPlanetData: () => sm.planetData,
+      getStoreState: () => usePlanetStore.getState() as unknown as Record<string, unknown>,
+      applyStoreState: (config) => {
+        const store = usePlanetStore.getState();
+        store.setIsLoading(true);
+        // Apply each config field
+        usePlanetStore.setState(config);
+        store.setIsLoading(false);
+      },
+      applyPlanetData: (heights, biomeIds) => {
+        sm.planetData.heightmap.set(heights);
+        sm.planetData.biomeIds.set(biomeIds);
+        sm.planetData.markHeightsDirty();
+        sm.planetData.markBiomesDirty();
+        // Update uniforms from loaded state
+        const state = usePlanetStore.getState();
+        sm.planet.material.uniforms.uHeightScale.value = state.terrainParams.heightScale;
+        sm.planet.material.uniforms.uRadius.value = state.terrainParams.radius;
+        sm.planet.updateBiomeColors(
+          state.biomes.map((b) => b.color),
+          state.biomes.map((b) => b.emissive)
+        );
+      },
+    });
+
+    // Thumbnail service
+    const thumbSvc = new ThumbnailService(sm.renderer, sm.scene);
+    svc.setThumbnailService(thumbSvc);
+    saveServiceRef.current = svc;
+
     setSmReady(true);
 
     // Dev-only: expose SceneManager for test harness
@@ -65,6 +104,7 @@ export default function App() {
     }
 
     return () => {
+      thumbSvc.dispose();
       tm.dispose();
       sm.dispose();
     };
@@ -255,20 +295,54 @@ export default function App() {
     return () => window.removeEventListener('stellaforge-erode', handler);
   }, [eroding]);
 
-  // FPS toggle with `
+  // Keyboard shortcuts: FPS toggle, Gallery, Save
+  const galleryOpen = usePlanetStore((s) => s.galleryOpen);
+  const saveDialogOpen = usePlanetStore((s) => s.saveDialogOpen);
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === '`') setFpsVisible((v) => !v);
+      // Ignore if typing in an input
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+      if (e.key === '`') {
+        setFpsVisible((v) => !v);
+        return;
+      }
+
+      // Only allow shortcuts when no modal is open
+      const anyModalOpen = newPlanetOpen || helpOpen || galleryOpen || saveDialogOpen;
+      if (anyModalOpen) return;
+
+      if (e.key === 'g' || e.key === 'G') {
+        usePlanetStore.getState().setGalleryOpen(true);
+      } else if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+        e.preventDefault();
+        usePlanetStore.getState().setSaveDialogOpen(true);
+      }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, []);
+  }, [newPlanetOpen, helpOpen, galleryOpen, saveDialogOpen]);
+
+  // beforeunload guard
+  const hasUnsavedChanges = usePlanetStore((s) => s.hasUnsavedChanges);
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (hasUnsavedChanges) {
+        e.preventDefault();
+      }
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [hasUnsavedChanges]);
 
   const handleNewPlanet = useCallback((templateIndex: number, seed: string) => {
     const template = TEMPLATES[templateIndex];
     const store = usePlanetStore.getState();
     store.setTerrainParams({ ...template.terrain, seed });
     store.setBiomes(template.biomes);
+    store.setCurrentSave(null, null);
+    store.markUnsaved();
   }, []);
 
   const handleScreenshot = useCallback(() => {
@@ -303,6 +377,13 @@ export default function App() {
         onApply={handleNewPlanet}
       />
       <HelpModal open={helpOpen} onClose={() => setHelpOpen(false)} />
+      {saveServiceRef.current && (
+        <>
+          <GalleryModal saveService={saveServiceRef.current} />
+          <SaveDialog saveService={saveServiceRef.current} />
+        </>
+      )}
+      <Toast />
     </div>
   );
 }

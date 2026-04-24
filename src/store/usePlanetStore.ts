@@ -115,6 +115,12 @@ interface PlanetStore {
   eroding: boolean;
   erosionProgress: number;
   version: number;
+  galleryOpen: boolean;
+  saveDialogOpen: boolean;
+  currentSaveId: string | null;
+  currentSaveName: string | null;
+  hasUnsavedChanges: boolean;
+  toastMessage: string | null;
 
   setIsLoading: (loading: boolean) => void;
   setTerrainParams: (params: Partial<TerrainParams>) => void;
@@ -135,6 +141,13 @@ interface PlanetStore {
   setEroding: (eroding: boolean) => void;
   setErosionProgress: (percent: number) => void;
   bumpVersion: () => void;
+  setGalleryOpen: (open: boolean) => void;
+  setSaveDialogOpen: (open: boolean) => void;
+  setCurrentSave: (id: string | null, name: string | null) => void;
+  markUnsaved: () => void;
+  markSaved: () => void;
+  showToast: (message: string) => void;
+  clearToast: () => void;
 }
 
 let _moonIdCounter = 0;
@@ -200,22 +213,28 @@ export const usePlanetStore = create<PlanetStore>((set) => ({
   eroding: false,
   erosionProgress: 0,
   version: 0,
+  galleryOpen: false,
+  saveDialogOpen: false,
+  currentSaveId: null,
+  currentSaveName: null,
+  hasUnsavedChanges: false,
+  toastMessage: null,
 
   setIsLoading: (loading) => set({ isLoading: loading }),
   setTerrainParams: (params) =>
-    set((s) => ({ terrainParams: { ...s.terrainParams, ...params } })),
+    set((s) => ({ terrainParams: { ...s.terrainParams, ...params }, hasUnsavedChanges: true })),
   setStarParams: (params) =>
-    set((s) => ({ starParams: { ...s.starParams, ...params } })),
+    set((s) => ({ starParams: { ...s.starParams, ...params }, hasUnsavedChanges: true })),
   setAtmosphereParams: (params) =>
-    set((s) => ({ atmosphereParams: { ...s.atmosphereParams, ...params } })),
+    set((s) => ({ atmosphereParams: { ...s.atmosphereParams, ...params }, hasUnsavedChanges: true })),
   setOceanParams: (params) =>
-    set((s) => ({ oceanParams: { ...s.oceanParams, ...params } })),
+    set((s) => ({ oceanParams: { ...s.oceanParams, ...params }, hasUnsavedChanges: true })),
   setCloudParams: (params) =>
-    set((s) => ({ cloudParams: { ...s.cloudParams, ...params } })),
+    set((s) => ({ cloudParams: { ...s.cloudParams, ...params }, hasUnsavedChanges: true })),
   setRingParams: (params) =>
-    set((s) => ({ ringParams: { ...s.ringParams, ...params } })),
+    set((s) => ({ ringParams: { ...s.ringParams, ...params }, hasUnsavedChanges: true })),
   setDayNightParams: (params) =>
-    set((s) => ({ dayNightParams: { ...s.dayNightParams, ...params } })),
+    set((s) => ({ dayNightParams: { ...s.dayNightParams, ...params }, hasUnsavedChanges: true })),
   setErosionParams: (params) =>
     set((s) => ({ erosionParams: { ...s.erosionParams, ...params } })),
   addMoon: () =>
@@ -239,14 +258,21 @@ export const usePlanetStore = create<PlanetStore>((set) => ({
     set((s) => ({
       moons: s.moons.map((m) => (m.id === id ? { ...m, ...params } : m)),
     })),
-  setBiomes: (biomes) => set({ biomes }),
+  setBiomes: (biomes) => set({ biomes, hasUnsavedChanges: true }),
   setToolState: (state) =>
     set((s) => ({ toolState: { ...s.toolState, ...state } })),
   setSelectedBiomeId: (id) => set({ selectedBiomeId: id }),
   setMeteorCraterBiomeId: (id) => set({ meteorCraterBiomeId: id }),
   setEroding: (eroding) => set({ eroding }),
   setErosionProgress: (erosionProgress) => set({ erosionProgress }),
-  bumpVersion: () => set((s) => ({ version: s.version + 1 })),
+  bumpVersion: () => set((s) => ({ version: s.version + 1, hasUnsavedChanges: true })),
+  setGalleryOpen: (open) => set({ galleryOpen: open }),
+  setSaveDialogOpen: (open) => set({ saveDialogOpen: open }),
+  setCurrentSave: (id, name) => set({ currentSaveId: id, currentSaveName: name }),
+  markUnsaved: () => set({ hasUnsavedChanges: true }),
+  markSaved: () => set({ hasUnsavedChanges: false }),
+  showToast: (message) => set({ toastMessage: message }),
+  clearToast: () => set({ toastMessage: null }),
 }));
 
 /** Convert store azimuth/elevation to a normalized direction vector. */
