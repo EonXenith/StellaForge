@@ -351,6 +351,56 @@ async function testLoadNonExistent() {
 }
 
 // ---------------------------------------------------------------------------
+// Thumbnail test (requires live renderer — called separately)
+// ---------------------------------------------------------------------------
+
+/**
+ * Tests thumbnail capture via the live renderer.
+ * Returns the thumbnail Blob so the test runner can write it to disk.
+ */
+export async function testThumbnailRoundTrip(
+  renderer: import('three').WebGLRenderer,
+  scene: import('three').Scene,
+): Promise<Blob> {
+  const { ThumbnailService } = await import('../ThumbnailService');
+  const { deps } = createMockDeps();
+  const svc = new PlanetSaveService(deps);
+
+  const thumbSvc = new ThumbnailService(renderer, scene);
+  svc.setThumbnailService(thumbSvc);
+
+  // Profile capture alone
+  const t0 = performance.now();
+  const testBlob = await thumbSvc.capture();
+  const captureMs = performance.now() - t0;
+  console.log(`  Thumbnail capture alone: ${captureMs.toFixed(1)}ms`);
+  assert(testBlob !== null, 'direct capture should return a blob');
+
+  // Save — should auto-capture thumbnail (second capture, target already allocated)
+  const t1 = performance.now();
+  const id = await svc.save('Thumbnail Test');
+  const saveMs = performance.now() - t1;
+  console.log(`  Save with thumbnail: ${saveMs.toFixed(1)}ms`);
+
+  // Load and verify thumbnail
+  const raw = await svc.getRaw(id);
+  assert(raw!.thumbnail !== null, 'thumbnail should not be null after save with ThumbnailService');
+  assert(raw!.thumbnail instanceof Blob, 'thumbnail should be a Blob');
+  assert(raw!.thumbnail!.type === 'image/png', `thumbnail type should be image/png, got "${raw!.thumbnail!.type}"`);
+  assert(raw!.thumbnail!.size > 0, 'thumbnail should have non-zero size');
+  console.log(`  Thumbnail: ${raw!.thumbnail!.size} bytes, type=${raw!.thumbnail!.type}`);
+
+  const blob = raw!.thumbnail!;
+
+  // Cleanup
+  thumbSvc.dispose();
+  await svc.delete(id);
+
+  console.log('  PASS: thumbnail round-trip');
+  return blob;
+}
+
+// ---------------------------------------------------------------------------
 // Runner
 // ---------------------------------------------------------------------------
 

@@ -59,6 +59,11 @@ export default function App() {
     toolManagerRef.current = tm;
     setSmReady(true);
 
+    // Dev-only: expose SceneManager for test harness
+    if (import.meta.env.DEV) {
+      (window as unknown as Record<string, unknown>).__sceneManager = sm;
+    }
+
     return () => {
       tm.dispose();
       sm.dispose();

@@ -1,4 +1,5 @@
 import { openDB, DBSchema, IDBPDatabase } from 'idb';
+import type { ThumbnailService } from './ThumbnailService';
 import type { TerrainParams } from '@/planet/TerrainGenerator';
 import type {
   BiomeDefinition,
@@ -147,9 +148,15 @@ export interface PlanetSaveServiceDeps {
 
 export class PlanetSaveService {
   private deps: PlanetSaveServiceDeps;
+  private thumbnailService: ThumbnailService | null = null;
 
   constructor(deps: PlanetSaveServiceDeps) {
     this.deps = deps;
+  }
+
+  /** Attach a thumbnail service. If unset, saves store thumbnail as null. */
+  setThumbnailService(svc: ThumbnailService | null) {
+    this.thumbnailService = svc;
   }
 
   /**
@@ -173,6 +180,17 @@ export class PlanetSaveService {
     const storeState = this.deps.getStoreState();
     const config = this.extractConfig(storeState);
 
+    // Auto-capture thumbnail if not explicitly provided and service is available
+    let thumb = thumbnail ?? null;
+    if (thumb === null && this.thumbnailService) {
+      try {
+        thumb = await this.thumbnailService.capture();
+      } catch {
+        // Capture failed (e.g. context lost) — save without thumbnail
+        thumb = null;
+      }
+    }
+
     const now = Date.now();
     const saveId = id ?? crypto.randomUUID();
 
@@ -183,7 +201,7 @@ export class PlanetSaveService {
       name,
       createdAt: id ? (await this.getMeta(saveId))?.createdAt ?? now : now,
       updatedAt: now,
-      thumbnail: thumbnail ?? null,
+      thumbnail: thumb,
       config,
       heights: (planetData.heightmap.buffer as ArrayBuffer).slice(0),
       biomes: (planetData.biomeIds.buffer as ArrayBuffer).slice(0),
